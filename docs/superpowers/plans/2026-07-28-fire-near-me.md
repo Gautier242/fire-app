@@ -961,6 +961,10 @@ def fetch(session):
         "request": "GetFeature",
         "typeNames": LAYER,
         "outputFormat": "application/json",
+        # Without srsName this server returns EPSG:3978 (Canada Atlas Lambert)
+        # in metres, e.g. [-1356919, 1788985]. Every distance downstream would
+        # be nonsense. Verified: with srsName it returns lon/lat in that order.
+        "srsName": "EPSG:4326",
         "count": MAX_FEATURES,
     })
 
@@ -1851,6 +1855,10 @@ def main():
         "request": "GetFeature",
         "typeNames": "public:basemap_land",
         "outputFormat": "application/json",
+        # Same trap as cwfis.py: this server defaults to EPSG:3978 metres.
+        # Province polygons in metres would make provinceAt() never match,
+        # so every user in Canada would be told we cannot check their province.
+        "srsName": "EPSG:4326",
         "propertyName": "NAME,COUNTRY,STATEABB",
         "CQL_FILTER": "COUNTRY='CAN'",
     }, timeout=120)
