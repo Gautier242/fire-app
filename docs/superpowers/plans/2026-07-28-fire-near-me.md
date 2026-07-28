@@ -145,8 +145,8 @@ const VANCOUVER = { lat: 49.2827, lon: -123.1207 };
 const KAMLOOPS  = { lat: 50.6745, lon: -120.3273 };
 
 test('haversineKm matches a known distance', () => {
-  // Vancouver to Kamloops is ~257 km great-circle.
-  assert.ok(Math.abs(haversineKm(VANCOUVER, KAMLOOPS) - 257) < 5);
+  // Vancouver to Kamloops is 252.7 km great-circle (verified independently).
+  assert.ok(Math.abs(haversineKm(VANCOUVER, KAMLOOPS) - 252.7) < 1);
 });
 
 test('haversineKm is zero for identical points', () => {
@@ -160,10 +160,11 @@ test('bearingDeg points northeast from Vancouver to Kamloops', () => {
 
 test('compassPoint maps degrees to eight points', () => {
   assert.equal(compassPoint(0), 'N');
-  assert.equal(compassPoint(44), 'N');
+  assert.equal(compassPoint(22), 'N');    // N sector runs 337.5 to 22.5
+  assert.equal(compassPoint(23), 'NE');   // boundary into NE
   assert.equal(compassPoint(46), 'NE');
   assert.equal(compassPoint(180), 'S');
-  assert.equal(compassPoint(359), 'N');
+  assert.equal(compassPoint(359), 'N');   // wraps past 360 back to N
 });
 
 test('pointInPolygon detects inside and outside', () => {
