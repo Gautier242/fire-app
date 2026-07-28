@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fire Near Me</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <h1 id="title">Fire Near Me</h1>
+
+  <p><button id="lang-toggle" style="width:auto;min-height:3rem;font-size:1.1rem">Français</button></p>
+
+  <button id="check">Check fires near me</button>
+
+  <div id="picker" class="hidden">
+    <p id="picker-label">Choose your community</p>
+    <input type="search" id="place-search" autocomplete="off" aria-label="Search for your community">
+    <ul class="places" id="place-results"></ul>
+  </div>
+
+  <div id="cards" aria-live="polite"></div>
+
+  <nav>
+    <a href="/map.html" id="map-link">See the map</a>
+    <a href="/sources.html" id="sources-link">Where this information comes from</a>
+  </nav>
+
+  <script type="module" src="/js/near-me.js"></script>
+</body>
+</html>
