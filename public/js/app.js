@@ -104,6 +104,10 @@ function renderRail() {
 
 function applyMode() {
   $('shell').dataset.mode = mode;
+  // Minimal hides the map, and the dial lives over the map. Move it into the
+  // rail rather than leaving the only way out of minimal inside the thing
+  // minimal hides.
+  $(mode === 'minimal' ? 'rail' : 'map').append($('dial'));
   document.querySelectorAll('#modes button').forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
   });
