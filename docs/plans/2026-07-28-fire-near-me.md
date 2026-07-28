@@ -1,6 +1,8 @@
 # Fire Near Me Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Work through the tasks in order. Each is a single test-driven cycle: write the
+> failing test, confirm it fails for the right reason, implement, confirm it passes,
+> commit. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship a static, bilingual web page that tells someone in Canada whether there is a fire near them, whether they are in an evacuation area, and whether the air is safe to breathe — and that is explicit about what it cannot check.
 
@@ -8,7 +10,7 @@
 
 **Tech Stack:** Python 3.11 + `requests` + `pytest` for the build; vanilla ES modules + Leaflet for the frontend; `node --test` (Node stdlib) for frontend tests; GitHub Actions + Cloudflare Pages for CI/CD.
 
-**Source spec:** `docs/superpowers/specs/2026-07-28-fire-near-me-design.md`
+**Source spec:** `docs/specs/2026-07-28-fire-near-me-design.md`
 
 ---
 
@@ -112,7 +114,7 @@ node --test tests-js/*.js    # frontend logic
 
 ## Design
 
-See `docs/superpowers/specs/2026-07-28-fire-near-me-design.md`.
+See `docs/specs/2026-07-28-fire-near-me-design.md`.
 ````
 
 - [ ] **Step 6: Commit**

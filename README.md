@@ -23,5 +23,5 @@ node --test tests-js/*.js    # frontend logic
 
 ## Design
 
-See `docs/superpowers/specs/2026-07-28-fire-near-me-design.md` for the design and
-`docs/superpowers/plans/2026-07-28-fire-near-me.md` for the implementation plan.
+See `docs/specs/2026-07-28-fire-near-me-design.md` for the design and
+`docs/plans/2026-07-28-fire-near-me.md` for the implementation plan.
