@@ -5,10 +5,20 @@ evacuation feed in v1, which is why `registry.PROVINCES` marks BC as the only
 province where the app may say "no evacuation near you".
 """
 from build.http import get_json
+from build.simplify import simplify_polygons
 
 URL = ("https://services6.arcgis.com/ubm4tcTYICKBpist/arcgis/rest/services/"
        "Evacuation_Orders_and_Alerts/FeatureServer/0/query")
 MAX_FEATURES = 2000
+
+# ~55 m. These polygons dominate the payload: at full resolution 67 zones carry
+# 26,079 vertices and cost 342 KB gzipped, against a 150 KB budget for the whole
+# near-me file. Simplification shifts a boundary in both directions, and the
+# dangerous direction is outward -- a resident just inside a zone being told they
+# are outside it. 55 m is finer than the real-world precision of an evacuation
+# boundary, which is drawn along roads and property lines, so the error stays
+# below the uncertainty already present in the source.
+SIMPLIFY_TOLERANCE_DEG = 0.0005
 
 
 def fetch(session):
@@ -49,7 +59,8 @@ def _polygons(geometry):
 def normalize(payload):
     zones = []
     for feature in payload.get("features", []):
-        polygons = _polygons(feature.get("geometry"))
+        polygons = simplify_polygons(
+            _polygons(feature.get("geometry")), SIMPLIFY_TOLERANCE_DEG)
         if not polygons:
             continue
         props = feature.get("properties") or {}

@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from build.http import get_json, make_session
+from build.simplify import simplify_polygons
 
 URL = "https://cwfis.cfs.nrcan.gc.ca/geoserver/ows"
 OUT = Path("public/static/coverage.geojson")
@@ -18,30 +19,6 @@ TOLERANCE_DEG = 0.01
 # Below this bounding-box area an island cannot contain a community whose
 # province we would get wrong by dropping it.
 MIN_AREA_SQ_DEG = 0.01
-
-
-def _rdp(points, tolerance):
-    """Ramer-Douglas-Peucker. Planar, which is fine at province scale."""
-    if len(points) < 3:
-        return points
-    ax, ay = points[0]
-    bx, by = points[-1]
-    dx, dy = bx - ax, by - ay
-    scale = (dx * dx + dy * dy) ** 0.5
-    worst_index, worst = 0, -1.0
-    for i in range(1, len(points) - 1):
-        px, py = points[i]
-        if scale == 0:
-            distance = ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
-        else:
-            distance = abs(dy * px - dx * py + bx * ay - by * ax) / scale
-        if distance > worst:
-            worst_index, worst = i, distance
-    if worst <= tolerance:
-        return [points[0], points[-1]]
-    left = _rdp(points[:worst_index + 1], tolerance)
-    right = _rdp(points[worst_index:], tolerance)
-    return left[:-1] + right
 
 
 def _ring_area(ring):
@@ -57,17 +34,9 @@ def _shrink(geometry):
     kind = geometry.get("type")
     coords = geometry.get("coordinates") or []
     polygons = [coords] if kind == "Polygon" else coords
-    kept = []
-    for rings in polygons:
-        if not rings or _ring_area(rings[0]) < MIN_AREA_SQ_DEG:
-            continue
-        simplified = []
-        for ring in rings:
-            reduced = _rdp([tuple(p[:2]) for p in ring], TOLERANCE_DEG)
-            if len(reduced) >= 4:
-                simplified.append([[round(x, 4), round(y, 4)] for x, y in reduced])
-        if simplified:
-            kept.append(simplified)
+    big = [rings for rings in polygons
+           if rings and _ring_area(rings[0]) >= MIN_AREA_SQ_DEG]
+    kept = simplify_polygons(big, TOLERANCE_DEG, precision=4)
     if not kept:
         return None
     return {"type": "MultiPolygon", "coordinates": kept}
