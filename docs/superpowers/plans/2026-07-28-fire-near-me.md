@@ -107,7 +107,7 @@ python3 -m http.server -d public 8000              # serve the site
 
 ```bash
 .venv/bin/pytest -q      # build pipeline
-node --test tests-js/    # frontend logic
+node --test tests-js/*.js    # frontend logic
 ```
 
 ## Design
@@ -2649,7 +2649,7 @@ applyLanguage();
 - [ ] **Step 4: Verify all tests still pass and serve the page**
 
 ```bash
-node --test tests-js/ && .venv/bin/pytest -q
+node --test tests-js/*.js && .venv/bin/pytest -q
 python3 -m http.server -d public 8000
 ```
 Open `http://localhost:8000`. Press the button, allow location. Expected: three
@@ -2877,7 +2877,7 @@ jobs:
           node-version: '20'
       - run: pip install -r requirements.txt
       - run: pytest -q
-      - run: node --test tests-js/
+      - run: node --test tests-js/*.js
 ```
 
 - [ ] **Step 2: Write `.github/workflows/build-and-deploy.yml`**
@@ -3008,7 +3008,7 @@ Run before calling this done. Report actual output, not recollection.
 
 ```bash
 .venv/bin/pytest -q                 # all Python tests
-node --test tests-js/               # all frontend tests
+node --test tests-js/*.js               # all frontend tests
 .venv/bin/python -m build.main --out public/data
 .venv/bin/pytest tests/test_budget.py -q
 ```

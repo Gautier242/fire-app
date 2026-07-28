@@ -18,7 +18,7 @@ python3 -m http.server -d public 8000              # serve the site
 
 ```bash
 .venv/bin/pytest -q      # build pipeline
-node --test tests-js/    # frontend logic
+node --test tests-js/*.js    # frontend logic
 ```
 
 ## Design
