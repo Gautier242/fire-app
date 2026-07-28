@@ -1,0 +1,81 @@
+name: build
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a deploy that is already publishing; queue behind it instead.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+
+      # public/data is gitignored, so a fresh checkout carries no history.
+      # Pull the currently published summary back down first: build.main uses
+      # it to keep a failing source's last good data, flagged stale with its
+      # real age. Expected to fail on the very first run.
+      - name: Seed previous data
+        continue-on-error: true
+        run: |
+          mkdir -p public/data
+          curl -sf --max-time 30 \
+            "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/summary.json" \
+            -o public/data/summary.json || rm -f public/data/summary.json
+
+      # Four upstream sources, each 3 attempts x 30s timeout plus backoff.
+      - name: Build data
+        timeout-minutes: 10
+        run: python -m build.main --out public/data
+
+      # A stale section with an honest timestamp is publishable. A section that
+      # is empty *because its fetch failed* is not - deploying that would show
+      # an all-clear map. Blocking here leaves the last good deploy serving.
+      - name: Refuse to publish missing sections
+        run: |
+          python - <<'EOF'
+          import json, sys
+          from build.main import SECTIONS
+
+          summary = json.load(open("public/data/summary.json"))
+          failed = {s["id"] for s in summary["sources"] if not s["ok"]}
+          blocked = [section for section in ("fires", "evacuations")
+                     if not summary[section]
+                     and any(SECTIONS[i] == section for i in failed)]
+
+          print(f"fires={len(summary['fires'])} "
+                f"evacuations={len(summary['evacuations'])} "
+                f"aqhi={len(summary['aqhi'])}")
+          print("stale sources:", ", ".join(sorted(failed)) or "none")
+          if blocked:
+              sys.exit(f"refusing to publish: {', '.join(blocked)} empty after fetch failure")
+          EOF
+
+      - name: Check size budget
+        run: pytest tests/test_budget.py -q
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
