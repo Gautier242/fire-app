@@ -152,7 +152,7 @@ function adopt(p, label) {
 async function showPicker() {
   $('picker').hidden = false;
   $('locate').hidden = true;
-  if (!places) places = await loadJSON('/static/places.json');
+  if (!places) places = await loadJSON('static/places.json');
   const input = $('place-search');
   const results = $('place-results');
   input.value = '';
@@ -228,8 +228,8 @@ async function boot() {
   applyMode();
 
   [summary, coverage] = await Promise.all([
-    loadJSON('/data/summary.json'),
-    loadJSON('/static/coverage.geojson'),
+    loadJSON('data/summary.json'),
+    loadJSON('static/coverage.geojson'),
   ]);
 
   view.draw(summary);
