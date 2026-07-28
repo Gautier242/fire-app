@@ -4,28 +4,87 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fire Near Me</title>
+  <meta name="description" content="Is there a fire near you? Wildfires, evacuation orders and air quality across Canada, in plain language.">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-  <h1 id="title">Fire Near Me</h1>
+  <div class="shell" id="shell" data-mode="simple">
 
-  <p><button id="lang-toggle" style="width:auto;min-height:3rem;font-size:1.1rem">Français</button></p>
+    <aside class="rail">
+      <div class="rail-head">
+        <div class="brand">Fire<span>·</span>Near<span>·</span>Me</div>
+        <button class="btn-ghost" id="lang">Français</button>
+      </div>
 
-  <button id="check">Check fires near me</button>
+      <button class="locate" id="locate">Check fires near me</button>
 
-  <div id="picker" class="hidden">
-    <p id="picker-label">Choose your community</p>
-    <input type="search" id="place-search" autocomplete="off" aria-label="Search for your community">
-    <ul class="places" id="place-results"></ul>
+      <div class="place" id="place" hidden>
+        <b id="place-name"></b>
+        <button id="change-place">Change</button>
+      </div>
+
+      <div class="picker" id="picker" hidden>
+        <label for="place-search" id="picker-label">Choose your community</label>
+        <input type="search" id="place-search" autocomplete="off" spellcheck="false">
+        <ul id="place-results"></ul>
+      </div>
+
+      <div class="answer" id="answer" hidden aria-live="polite">
+        <span class="tag" id="tag"><i></i><span id="tag-text"></span></span>
+        <h2 id="headline"></h2>
+        <p id="subline"></p>
+      </div>
+
+      <dl class="facts" id="facts" hidden></dl>
+
+      <div class="official" id="official" hidden>
+        <p id="official-text"></p>
+        <a id="official-link" href="#" rel="noopener"></a>
+      </div>
+
+      <div class="rail-foot">
+        <span class="live" id="freshness"><i></i><span id="freshness-text">Loading…</span></span>
+        <span id="source-count"></span>
+      </div>
+    </aside>
+
+    <div class="map">
+      <div id="map"></div>
+
+      <div class="toolbar" id="toolbar">
+        <button class="chip" data-layer="fires" aria-pressed="true">
+          <i class="sw fire"></i><span data-t="layer_fires">Fires</span>
+        </button>
+        <button class="chip" data-layer="orders" aria-pressed="true">
+          <i class="sw order"></i><span data-t="layer_orders">Evacuation orders</span>
+        </button>
+        <button class="chip" data-layer="alerts" aria-pressed="true">
+          <i class="sw alert"></i><span data-t="layer_alerts">Alerts</span>
+        </button>
+        <button class="chip" data-layer="satellite" aria-pressed="false" data-adv>
+          <i class="sw sat"></i><span data-t="layer_satellite">Today's satellite pass</span>
+        </button>
+
+        <div class="seg basemap" id="basemap" role="group" aria-label="Base map">
+          <button data-base="plain" aria-pressed="true" data-t="base_map">Map</button>
+          <button data-base="imagery" aria-pressed="false" data-t="base_satellite">Satellite</button>
+        </div>
+      </div>
+
+      <div class="detail-dial">
+        <span class="label" data-t="detail_label">Detail</span>
+        <div class="seg" id="modes" role="group" aria-label="Detail level">
+          <button data-mode="minimal" aria-pressed="false" data-t="mode_minimal">Minimal</button>
+          <button data-mode="simple" aria-pressed="true" data-t="mode_simple">Simple</button>
+          <button data-mode="advanced" aria-pressed="false" data-t="mode_advanced">Advanced</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
-  <div id="cards" aria-live="polite"></div>
-
-  <nav>
-    <a href="/map.html" id="map-link">See the map</a>
-    <a href="/sources.html" id="sources-link">Where this information comes from</a>
-  </nav>
-
-  <script type="module" src="/js/near-me.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="/js/app.js"></script>
 </body>
 </html>
