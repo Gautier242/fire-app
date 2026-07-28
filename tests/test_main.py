@@ -80,3 +80,30 @@ def test_build_raises_if_every_source_fails():
             "cwfis_perimeters": boom, "bc_fires": boom,
             "bc_evac": boom, "aqhi": boom,
         })
+
+
+def test_road_closures_reach_their_own_section():
+    summary = build(now=NOW, previous=None, fetchers={
+        "cwfis_perimeters": ok([]), "bc_fires": ok([]), "bc_evac": ok([]), "aqhi": ok([]),
+        "bc_roads": ok([{"id": "DBC-1", "kind": "closure", "name": "Hwy 97",
+                         "geometry": {"type": "Point", "coordinates": [-120.0, 50.0]}}]),
+    })
+    assert len(summary["closures"]) == 1
+    assert summary["closures"][0]["source"] == "bc_roads"
+
+
+def test_a_failing_road_feed_keeps_its_last_good_closures():
+    # A road that was shut an hour ago is still the safer assumption than a map
+    # that quietly forgets it while the fetch is broken.
+    previous = {
+        "closures": [{"id": "DBC-9", "kind": "closure", "name": "Hwy 5", "source": "bc_roads"}],
+        "sources": [{"id": "bc_roads", "ok": True, "fetched_at": "2026-07-28T11:00:00Z", "stale": False}],
+    }
+    summary = build(now=NOW, previous=previous, fetchers={
+        "cwfis_perimeters": ok([]), "bc_fires": ok([]), "bc_evac": ok([]), "aqhi": ok([]),
+        "bc_roads": boom,
+    })
+    roads = next(s for s in summary["sources"] if s["id"] == "bc_roads")
+    assert roads["stale"] is True
+    assert roads["fetched_at"] == "2026-07-28T11:00:00Z"
+    assert summary["closures"] == previous["closures"]

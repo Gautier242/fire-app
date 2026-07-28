@@ -10,7 +10,7 @@ from pathlib import Path
 
 from build import registry
 from build.http import make_session
-from build.sources import aqhi, bc_evac, bc_fires, cwfis
+from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis
 
 # Which summary section each source populates.
 SECTIONS = {
@@ -18,6 +18,7 @@ SECTIONS = {
     "bc_fires": "fires",
     "bc_evac": "evacuations",
     "aqhi": "aqhi",
+    "bc_roads": "closures",
 }
 
 
@@ -27,6 +28,7 @@ def default_fetchers(session):
         "bc_fires": lambda: bc_fires.normalize(bc_fires.fetch(session)),
         "bc_evac": lambda: bc_evac.normalize(bc_evac.fetch(session)),
         "aqhi": lambda: aqhi.normalize(aqhi.fetch(session)),
+        "bc_roads": lambda: bc_roads.normalize(bc_roads.fetch(session)),
     }
 
 
@@ -57,7 +59,7 @@ def _previous_fetched_at(previous, source_id):
 
 
 def build(now, previous, fetchers):
-    sections = {"fires": [], "evacuations": [], "aqhi": []}
+    sections = {"fires": [], "evacuations": [], "aqhi": [], "closures": []}
     sources = []
     succeeded = 0
 
@@ -113,7 +115,8 @@ def main():
     print(f"wrote {summary_path} "
           f"({len(summary['fires'])} fires, "
           f"{len(summary['evacuations'])} evacuation zones, "
-          f"{len(summary['aqhi'])} air quality readings)")
+          f"{len(summary['aqhi'])} air quality readings, "
+          f"{len(summary['closures'])} road closures)")
     if failed:
         print(f"WARNING: stale sources: {', '.join(failed)}")
 
