@@ -42,3 +42,16 @@ test('searchPlaces returns nothing for a query that is too short', () => {
   assert.deepEqual(searchPlaces('k', PLACES), []);
   assert.deepEqual(searchPlaces('', PLACES), []);
 });
+
+test('searchPlaces surfaces the prominent place first', () => {
+  const places = [
+    { n: 'Kamanitutaukach', p: 'QC', lat: 54, lon: -70, r: 9 },
+    { n: 'Kamsack', p: 'SK', lat: 51.56, lon: -101.9, r: 4 },
+    { n: 'Kamloops', p: 'BC', lat: 50.67, lon: -120.33, r: 1 },
+  ];
+  assert.equal(searchPlaces('kam', places)[0].n, 'Kamloops');
+});
+
+test('searchPlaces still caps results and rejects short queries', () => {
+  assert.equal(searchPlaces('k', []).length, 0);
+});

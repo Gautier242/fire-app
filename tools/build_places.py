@@ -64,6 +64,20 @@ PROVINCES = {
 }
 
 
+# "Relevance at Scale" is the smallest-scale map the gazetteer draws the name
+# on, as a denominator: Toronto and Yellowknife are 30000000 (legible on a map
+# of the whole country), Kamloops and Vancouver 17500000, Kamsack 7500000,
+# Kamarsuk 1200000. So a LARGER denominator means a MORE prominent place, and
+# the 216853 rows sitting at the 50000 floor are the long tail of named
+# specks. A row without a usable value sorts last rather than being dropped —
+# a place missing from the picker cannot be searched for at all.
+def scale_of(row):
+    try:
+        return int(row["Relevance at Scale"])
+    except (KeyError, TypeError, ValueError):
+        return 0
+
+
 def main():
     response = make_session().get(URL, timeout=180)
     response.raise_for_status()
@@ -91,6 +105,7 @@ def main():
             "p": province,
             "lat": round(lat, 4),
             "lon": round(lon, 4),
+            "scale": scale_of(row),
         }
         # The same place recurs once per language it is named in.
         key = (place["n"], place["p"], place["lat"], place["lon"])
@@ -99,7 +114,15 @@ def main():
         seen.add(key)
         places.append(place)
 
-    places.sort(key=lambda p: (p["n"], p["p"]))
+    # Collapse the scale denominators to a dense 0-based rank so the key costs
+    # one or two digits per place rather than eight.
+    ranks = {s: i for i, s in enumerate(sorted({p["scale"] for p in places}, reverse=True))}
+    for place in places:
+        place["r"] = ranks[place.pop("scale")]
+
+    # Rank first, so the file reads most-prominent-first and a truncated read
+    # still holds the places anyone is most likely to be searching for.
+    places.sort(key=lambda p: (p["r"], p["n"], p["p"]))
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(places, separators=(",", ":"), ensure_ascii=False))
     print(f"wrote {OUT} with {len(places)} places")
