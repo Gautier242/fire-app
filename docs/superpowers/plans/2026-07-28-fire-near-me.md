@@ -1859,9 +1859,11 @@ def main():
         # Province polygons in metres would make provinceAt() never match,
         # so every user in Canada would be told we cannot check their province.
         "srsName": "EPSG:4326",
-        "propertyName": "NAME,COUNTRY,STATEABB",
+        # No propertyName. Restricting the returned columns also drops the
+        # geometry column, producing 712 features with geometry: null -- a file
+        # that is correct by every count and contains no polygons at all.
         "CQL_FILTER": "COUNTRY='CAN'",
-    }, timeout=120)
+    }, timeout=180)
 
     features = []
     for feature in payload["features"]:
@@ -1883,6 +1885,14 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+**The shipped version does more than the block above.** See the committed
+`tools/build_coverage.py`: it also simplifies rings to ~1 km, drops islands under
+0.01 sq deg (1.7 MB → 442 KB, and this file loads on the near-me path), and stores
+a per-feature `bbox` used by the coastal fallback in `provinceAt`. Generalized
+coastlines put Vancouver 1.3 km and Halifax 1.2 km outside their own province, so
+without that fallback BC's largest city reports "we cannot check your province".
+`tests-js/test_coverage.js` guards all of it.
 
 - [ ] **Step 2: Run it and check the size**
 
