@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Where this information comes from — Fire Near Me</title>
   <meta name="description" content="Every source behind Fire Near Me: who publishes it, when we last checked it, and which provinces we cannot check evacuation orders for.">
-  <link rel="stylesheet" href="/css/app.css">
+  <!-- Relative, not root-absolute: this ships to a project page served from
+       /fire-app/, where /css/app.css resolves to the domain root and 404s. -->
+  <link rel="stylesheet" href="css/app.css">
   <style>
     /* Page-specific layout only. Everything visual is app.css. */
     body { overflow: auto; }
@@ -46,7 +48,7 @@
     <div class="rail-head doc-head">
       <div class="brand">Fire<span>·</span>Near<span>·</span>Me</div>
       <nav>
-        <a class="btn-ghost" href="/" id="back">See the map</a>
+        <a class="btn-ghost" href="./" id="back">See the map</a>
         <button class="btn-ghost" id="lang">Français</button>
       </nav>
     </div>
@@ -61,6 +63,6 @@
     </div>
   </main>
 
-  <script type="module" src="/js/sources.js"></script>
+  <script type="module" src="js/sources.js"></script>
 </body>
 </html>

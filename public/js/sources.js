@@ -320,7 +320,9 @@ $('lang').addEventListener('click', () => {
 });
 
 render();
-fetch('/data/summary.json', { cache: 'no-cache' })
+// Relative to the page, not the domain root: on a project page the site lives
+// under /fire-app/, where '/data/summary.json' 404s.
+fetch('data/summary.json', { cache: 'no-cache' })
   .then((r) => { if (!r.ok) throw new Error(`summary.json: ${r.status}`); return r.json(); })
   .then((data) => { summary = data; render(); })
   .catch((error) => {
