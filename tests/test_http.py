@@ -39,13 +39,41 @@ def test_get_json_always_passes_a_timeout():
     assert session.calls[0]["timeout"] is not None
 
 
+class FakeSleep:
+    """Records backoff delays instead of waiting through them."""
+
+    def __init__(self):
+        self.delays = []
+
+    def __call__(self, seconds):
+        self.delays.append(seconds)
+
+
 def test_get_json_raises_fetch_error_after_bounded_attempts():
     session = FakeSession([RuntimeError("boom")] * 5)
+    slept = FakeSleep()
     with pytest.raises(FetchError):
-        get_json(session, "https://example.test/a", attempts=3)
+        get_json(session, "https://example.test/a", attempts=3, sleep=slept)
     assert len(session.calls) == 3
 
 
 def test_get_json_recovers_if_a_later_attempt_succeeds():
     session = FakeSession([RuntimeError("boom"), FakeResponse({"ok": True})])
-    assert get_json(session, "https://example.test/a", attempts=3) == {"ok": True}
+    slept = FakeSleep()
+    assert get_json(session, "https://example.test/a", attempts=3, sleep=slept) == {"ok": True}
+
+
+def test_get_json_backs_off_progressively_and_not_after_the_last_attempt():
+    session = FakeSession([RuntimeError("boom")] * 3)
+    slept = FakeSleep()
+    with pytest.raises(FetchError):
+        get_json(session, "https://example.test/a", attempts=3, sleep=slept)
+    # Two waits for three attempts: never sleep after the final failure.
+    assert slept.delays == [2, 4]
+
+
+def test_get_json_does_not_sleep_when_the_first_attempt_succeeds():
+    session = FakeSession([FakeResponse({"ok": True})])
+    slept = FakeSleep()
+    get_json(session, "https://example.test/a", sleep=slept)
+    assert slept.delays == []
