@@ -7,7 +7,7 @@ import { describe } from './rail.js';
 
 const MODE_KEY = 'fire-near-me.mode';
 const LANG_KEY = 'fire-near-me.lang';
-const ADVANCED_ONLY = ['satellite', 'closures'];
+const ADVANCED_ONLY = ['satellite', 'closures', 'aqhi'];
 
 const $ = (id) => document.getElementById(id);
 

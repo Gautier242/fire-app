@@ -1,5 +1,6 @@
 // Leaflet map: basemaps, data layers, and the you-are-here marker.
 // Owns nothing but the map — all decisions about what to say live in rail.js.
+import { aqhiBand } from './status.js';
 
 const CANADA_CENTRE = [56, -96];
 const CANADA_ZOOM = 4;
@@ -9,6 +10,11 @@ const CANADA_ZOOM = 4;
 const HEAT = ['#FFC061', '#FF7A3D', '#E23A1E'];
 
 const GIBS_LAYER = 'VIIRS_NOAA20_CorrectedReflectance_TrueColor';
+
+// Air quality reads as a number, not a glow: a station is a reading, and the
+// reading itself is the useful thing. Bands come from status.js so the map and
+// the rail can never disagree about what counts as unhealthy.
+const AQHI_CLASS = { low: 'b0', moderate: 'b1', high: 'b2', very_high: 'b3' };
 
 function gibsUrl(date) {
   return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${GIBS_LAYER}`
@@ -84,6 +90,7 @@ export function createMap(elementId) {
     orders: L.layerGroup(),
     alerts: L.layerGroup(),
     closures: L.layerGroup(),
+    aqhi: L.layerGroup(),
     satellite: gibs,
   };
 
@@ -143,6 +150,7 @@ export function createMap(elementId) {
       layers.orders.clearLayers();
       layers.alerts.clearLayers();
       layers.closures.clearLayers();
+      layers.aqhi.clearLayers();
 
       for (const fire of summary.fires || []) {
         const tone = fire.named
@@ -176,6 +184,28 @@ export function createMap(elementId) {
         shape.bindPopup(`<b>${zone.name}</b><br>${isOrder ? 'Evacuation ORDER' : 'Evacuation ALERT'}`
           + (zone.agency ? `<br>${zone.agency}` : ''));
         shape.addTo(isOrder ? layers.orders : layers.alerts);
+      }
+
+      for (const station of summary.aqhi || []) {
+        const band = aqhiBand(station.value);
+        if (!band) continue;
+        // The published index is the rounded value, and anything under 1 reads
+        // as 1 — the same rule status.js applies to the rail.
+        const shown = Math.max(1, Math.round(station.value));
+        const marker = L.marker([station.lat, station.lon], {
+          icon: L.divIcon({
+            className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+            html: `<div class="aqhi-pill ${AQHI_CLASS[band]}">${shown}</div>`,
+          }),
+          alt: `Air quality ${shown}`,
+        });
+        // Resolved when the popup opens, so it follows the language toggle.
+        marker.bindPopup(() => {
+          const lang = document.documentElement.lang === 'fr' ? 'fr' : 'en';
+          const name = (station.name && (station.name[lang] || station.name.en)) || station.id;
+          return `<b>${name}</b><br>${lang === 'fr' ? 'Cote air santé' : 'Air Quality Health Index'}: ${shown}`;
+        });
+        marker.addTo(layers.aqhi);
       }
 
       for (const closure of summary.closures || []) {
