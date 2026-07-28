@@ -21,6 +21,20 @@ def fetch(session):
     })
 
 
+def is_extinguished(status):
+    """True for fires the feed reports as out.
+
+    This feed carries the whole season, and most of it is history: 643 of 782
+    records were "Out" when this was written. Passing those through would tell
+    someone there is a wildfire 3 km away that has been extinguished for weeks.
+
+    Deliberately a denylist of the one known terminal status, not an allowlist
+    of active ones. An unfamiliar or newly introduced status is kept and shown,
+    because over-warning is the safe direction to be wrong in.
+    """
+    return (status or "").strip().lower() == "out"
+
+
 def normalize(payload):
     fires = []
     for feature in payload.get("features", []):
@@ -31,6 +45,8 @@ def normalize(payload):
         props = feature.get("properties") or {}
         number = props.get("FIRE_NUMBER")
         if not number:
+            continue
+        if is_extinguished(props.get("FIRE_STATUS")):
             continue
         fire = {
             "id": f"bc:{number}",

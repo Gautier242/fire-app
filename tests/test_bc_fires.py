@@ -6,8 +6,30 @@ from build.sources.bc_fires import normalize
 FIXTURE = json.loads(Path("tests/fixtures/bc_fires.json").read_text())
 
 
-def test_normalize_produces_one_fire_per_feature():
-    assert len(normalize(FIXTURE)) == 5
+def test_normalize_returns_only_fires_that_are_still_burning():
+    # The fixture holds 5 records, 3 of them already out.
+    assert len(normalize(FIXTURE)) == 2
+
+
+def test_extinguished_fires_are_dropped():
+    from build.sources.bc_fires import is_extinguished
+
+    assert is_extinguished("Out") is True
+    assert is_extinguished("out") is True
+    assert is_extinguished("Out of Control") is False
+    assert is_extinguished("Being Held") is False
+    assert is_extinguished("Under Control") is False
+    assert is_extinguished("Fire of Note") is False
+
+
+def test_an_unfamiliar_status_is_kept_rather_than_silently_dropped():
+    # Over-warning is the safe direction; a new upstream status must not make
+    # a burning fire disappear from the app.
+    from build.sources.bc_fires import is_extinguished
+
+    assert is_extinguished("Some New Status") is False
+    assert is_extinguished(None) is False
+    assert is_extinguished("") is False
 
 
 def test_bc_fires_are_named_and_stably_identified():
