@@ -42,5 +42,23 @@ PROVINCES = [
 ]
 
 
-def coverage_payload():
-    return [dict(p) for p in PROVINCES]
+# France has no evacuation feed to cover, at any level. Orders are broadcast by
+# FR-Alert straight to phones, and prefecture arretes are PDFs across 101
+# separate sites. So the French coverage row is a single national statement of
+# what we cannot do, not a per-departement table: there is nothing that varies.
+#
+# Searched and confirmed absent 2026-07-29: data.gouv.fr returns zero datasets
+# for "evacuation" and zero for "arrete prefectoral evacuation".
+FRANCE = [
+    {"country": "FR", "danger_forecast": True, "evacuations": False,
+     "alert_channel": "FR-Alert",
+     "official_url": "https://www.interieur.gouv.fr/Alerte/FR-Alert"},
+]
+
+
+def coverage_payload(country="ca"):
+    if country == "ca":
+        return [dict(p) for p in PROVINCES]
+    if country == "fr":
+        return [dict(row) for row in FRANCE]
+    raise ValueError(f"unknown country {country!r}")

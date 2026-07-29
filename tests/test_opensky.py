@@ -80,6 +80,17 @@ def test_an_unnamed_aircraft_keeps_its_icao_rather_than_inventing_a_callsign():
     assert out[0]["id"] == "abc123"
 
 
+def test_securite_civile_callsigns_are_labelled_with_their_type():
+    from build.sources.opensky import fleet_role
+
+    assert fleet_role("PELICAN32") == "Canadair CL-415"
+    assert fleet_role("DRAGON 83") == "Hélicoptère de secours"
+    # An aircraft we cannot name is still shown, just unlabelled — never guessed.
+    assert fleet_role("CGEJG") is None
+    assert fleet_role(None) is None
+    assert normalize({"states": [state(callsign="MILAN73", baro=400.0)]})[0]["role"] == "Dash-8"
+
+
 def test_only_aircraft_close_to_a_known_fire_are_kept():
     fires = [{"lat": 50.0, "lon": -120.0}]
     close = normalize({"states": [state(lat=50.1, lon=-120.1)]})

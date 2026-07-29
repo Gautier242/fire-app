@@ -4,5 +4,6 @@ __pycache__/
 .pytest_cache/
 node_modules/
 public/data/
+public/fr/data/
 .DS_Store
 .playwright-mcp/

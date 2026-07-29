@@ -16,8 +16,33 @@ TOKEN_URL = ("https://auth.opensky-network.org/auth/realms/opensky-network"
              "/protocol/openid-connect/token")
 STATES_URL = "https://opensky-network.org/api/states/all"
 
-# Canada, as a bounding box. Costs 4 credits per call.
-BBOX = {"lamin": 41.0, "lamax": 84.0, "lomin": -141.0, "lomax": -52.0}
+# Bounding boxes, one per country. Each costs 4 credits per call, so both
+# countries on the 30-minute cron spend 384/day against the 4000/day free tier.
+BBOX = {"lamin": 41.0, "lamax": 84.0, "lomin": -141.0, "lomax": -52.0}  # Canada
+CANADA = BBOX
+FRANCE = {"lamin": 41.0, "lamax": 51.5, "lomin": -5.5, "lomax": 10.0}
+
+# Sécurité Civile flies named callsigns, so French firefighting aircraft can be
+# labelled precisely instead of guessed at. Canada needed an airline denylist
+# because its tankers fly under plain registrations.
+SECURITE_CIVILE = {
+    "PELICAN": "Canadair CL-415",
+    "MILAN": "Dash-8",
+    "BENGALE": "Beechcraft King Air",
+    "DRAGON": "Hélicoptère de secours",
+}
+
+
+def fleet_role(callsign):
+    """The Sécurité Civile type behind a callsign, or None if we do not know.
+
+    Returning None rather than a guess matters: the popup may only claim what
+    ADS-B supports, and an unlabelled aircraft is still shown.
+    """
+    if not callsign:
+        return None
+    name = callsign.strip().upper().rstrip("0123456789 ")
+    return SECURITE_CIVILE.get(name)
 
 # Altitude is the only usable discriminator. ADS-B carries no role, and a first
 # pass at 3500 m surfaced ACA223 and WJA793 crossing a fire on normal routings —
@@ -74,9 +99,9 @@ def token(session, client_id=None, client_secret=None):
     return response.json()["access_token"]
 
 
-def fetch(session, access_token=None):
+def fetch(session, access_token=None, bbox=None):
     access_token = access_token or token(session)
-    response = session.get(STATES_URL, params=BBOX, timeout=30,
+    response = session.get(STATES_URL, params=bbox or BBOX, timeout=30,
                            headers={"Authorization": f"Bearer {access_token}"})
     response.raise_for_status()
     return response.json()
@@ -104,6 +129,7 @@ def normalize(payload):
                 "altitude_ft": round(altitude * M_TO_FT),
                 "speed_kt": round(state[VELOCITY] * MS_TO_KT) if state[VELOCITY] else None,
                 "track": state[TRACK],
+                "role": fleet_role(callsign),
                 "source": "opensky",
             })
         except (IndexError, TypeError):
