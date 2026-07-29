@@ -42,9 +42,14 @@ jobs:
             "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/summary.json" \
             -o public/data/summary.json || rm -f public/data/summary.json
 
-      # Four upstream sources, each 3 attempts x 30s timeout plus backoff.
+      # Six upstream sources, each 3 attempts x 30s timeout plus backoff.
+      # OpenSky credentials are optional: without them the aircraft layer is
+      # flagged stale and every other source still publishes.
       - name: Build data
         timeout-minutes: 10
+        env:
+          OPENSKY_CLIENT_ID: ${{ secrets.OPENSKY_CLIENT_ID }}
+          OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
         run: python -m build.main --out public/data
 
       # A stale section with an honest timestamp is publishable. A section that

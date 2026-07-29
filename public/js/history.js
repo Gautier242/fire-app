@@ -1,0 +1,68 @@
+// Satellite hotspot history: turning a 72-hour window into the handful of
+// moments a satellite actually looked. Pure — no DOM, no Leaflet.
+
+// Polar-orbiting satellites pass overhead a few times a day, so detections
+// arrive in clumps and most clock hours hold nothing at all. A slider with one
+// stop per hour would spend most of its travel on empty hours, and an empty
+// hour drawn as "no fire" reads as the fire having gone out. Stepping through
+// observed passes instead means every stop shows real data.
+export function observedPasses(history) {
+  if (!history || !history.points || !history.points.length) return [];
+  return [...new Set(history.points.map((p) => p[2]))].sort((a, b) => a - b);
+}
+
+// hour 71 is the newest hour observed, and generated_at is its timestamp.
+export function hourToDate(history, hour) {
+  if (!history || !history.generated_at) return null;
+  const newest = new Date(history.generated_at);
+  if (Number.isNaN(newest.getTime())) return null;
+  return new Date(newest.getTime() - (71 - hour) * 3600 * 1000);
+}
+
+export function passLabel(history, hour, lang = 'en') {
+  const when = hourToDate(history, hour);
+  if (!when) return '';
+  // Viewer's local time: someone deciding whether to drive tonight thinks in
+  // their own clock, not UTC.
+  return when.toLocaleString(lang === 'fr' ? 'fr-CA' : 'en-CA', {
+    weekday: 'short', hour: 'numeric', minute: '2-digit',
+  });
+}
+
+// The bounding box the fetch uses reaches into Oregon, Idaho and Montana, so a
+// good share of the points are American. They are kept because a fire does not
+// stop at the border and smoke certainly does not, but they are drawn faded so
+// the Canadian picture stays the subject.
+// ponytail: 49th parallel west of -95 only; the border east of there dips and
+// this will call some Ontario/Quebec border points foreign. Swap in a real
+// point-in-polygon against coverage.geojson if that ever matters.
+export function inCanada(lon, lat) {
+  return lon < -95 ? lat >= 49 : lat >= 45;
+}
+
+// Points for one pass, plus the two before it drawn faintly so direction of
+// growth is visible rather than inferred from memory.
+export function pointsForPass(history, passes, index, trail = 2) {
+  if (!history || !passes.length) return [];
+  const shown = passes.slice(Math.max(0, index - trail), index + 1);
+  const ageOf = new Map(shown.map((hour, i) => [hour, shown.length - 1 - i]));
+  return history.points
+    .filter((p) => ageOf.has(p[2]))
+    .map(([lon, lat, hour, band]) => ({
+      lon, lat, band, age: ageOf.get(hour), foreign: !inCanada(lon, lat),
+    }));
+}
+
+export function windAt(history, hour) {
+  if (!history || !history.wind) return null;
+  const row = history.wind.find((w) => w[0] === hour);
+  return row ? { speed: row[1], direction: row[2] } : null;
+}
+
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+// Meteorological convention: a wind "from 069" blows toward the southwest.
+// Saying which way it is blowing is the useful half for a fire.
+export function windToward(direction) {
+  return COMPASS[Math.round(((direction + 180) % 360) / 45) % 8];
+}

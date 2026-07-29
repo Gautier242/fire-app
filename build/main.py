@@ -10,7 +10,7 @@ from pathlib import Path
 
 from build import registry
 from build.http import make_session
-from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis, cwfis_history
+from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis, cwfis_history, opensky
 
 # Which summary section each source populates.
 SECTIONS = {
@@ -19,6 +19,7 @@ SECTIONS = {
     "bc_evac": "evacuations",
     "aqhi": "aqhi",
     "bc_roads": "closures",
+    "opensky": "aircraft",
 }
 
 
@@ -29,6 +30,7 @@ def default_fetchers(session):
         "bc_evac": lambda: bc_evac.normalize(bc_evac.fetch(session)),
         "aqhi": lambda: aqhi.normalize(aqhi.fetch(session)),
         "bc_roads": lambda: bc_roads.normalize(bc_roads.fetch(session)),
+        "opensky": lambda: opensky.normalize(opensky.fetch(session)),
     }
 
 
@@ -59,7 +61,7 @@ def _previous_fetched_at(previous, source_id):
 
 
 def build(now, previous, fetchers):
-    sections = {"fires": [], "evacuations": [], "aqhi": [], "closures": []}
+    sections = {"fires": [], "evacuations": [], "aqhi": [], "closures": [], "aircraft": []}
     sources = []
     succeeded = 0
 
@@ -126,6 +128,12 @@ def main():
     session = make_session()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     summary = build(now=now, previous=previous, fetchers=default_fetchers(session))
+
+    # Aircraft can only be filtered once the fires are known, so it happens here
+    # rather than in the fetcher. Every light aircraft in Canada is noise; one
+    # circling a fire is information.
+    summary["aircraft"] = opensky.near_fires(summary["aircraft"], summary["fires"])
+
     _write_atomically(summary_path, summary)
 
     failed = [s["id"] for s in summary["sources"] if not s["ok"]]
@@ -133,7 +141,8 @@ def main():
           f"({len(summary['fires'])} fires, "
           f"{len(summary['evacuations'])} evacuation zones, "
           f"{len(summary['aqhi'])} air quality readings, "
-          f"{len(summary['closures'])} road closures)")
+          f"{len(summary['closures'])} road closures, "
+          f"{len(summary['aircraft'])} aircraft over fires)")
     if failed:
         print(f"WARNING: stale sources: {', '.join(failed)}")
 
