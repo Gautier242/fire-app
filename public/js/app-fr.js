@@ -45,6 +45,12 @@ const COPY = {
     loading: 'Chargement…', failed: 'Données indisponibles.',
     today: "Aujourd'hui", tomorrow: 'Demain', air: "Qualité de l'air",
     unavailable: 'Niveau non disponible',
+    fire: 'Chaleur détectée par satellite', detections: 'détections',
+    wind: 'Vent', aircraftNear: 'aéronef(s) à proximité',
+    aircraftNote: "Vole bas près d'un feu. Son rôle n'est pas confirmé.",
+    industrial: 'Source industrielle',
+    industrialNote: 'Brûle au même endroit tous les jours. Ce n\'est pas un feu de forêt.',
+    outside: 'Hors de France',
   },
   en: {
     locate: 'Check near me', checking: 'Checking…',
@@ -55,6 +61,12 @@ const COPY = {
     loading: 'Loading…', failed: 'Data unavailable.',
     today: 'Today', tomorrow: 'Tomorrow', air: 'Air quality',
     unavailable: 'Level not available',
+    fire: 'Heat detected by satellite', detections: 'detections',
+    wind: 'Wind', aircraftNear: 'aircraft nearby',
+    aircraftNote: 'Flying low near a fire. What it is doing is not confirmed.',
+    industrial: 'Industrial source',
+    industrialNote: 'Burns at the same spot every day. Not a wildfire.',
+    outside: 'Outside France',
   },
 };
 
@@ -145,7 +157,10 @@ function applyLanguage() {
 function drawMap() {
   view.drawFrance(summary, departements, {
     today: c().today, tomorrow: c().tomorrow, air: c().air,
-    unavailable: c().unavailable,
+    unavailable: c().unavailable, fire: c().fire, detections: c().detections,
+    wind: c().wind, aircraftNear: c().aircraftNear, aircraftNote: c().aircraftNote,
+    industrial: c().industrial, industrialNote: c().industrialNote,
+    outside: c().outside,
     level: DANGER_LABELS[lang === 'en' ? 'en' : 'fr'],
   });
 }
@@ -279,7 +294,7 @@ async function boot() {
   ]);
 
   drawMap();
-  view.toggle('danger', true);
+  ['danger', 'fires', 'closures', 'aircraft'].forEach((n) => view.toggle(n, true));
   renderRail();
 }
 

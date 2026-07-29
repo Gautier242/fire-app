@@ -83,3 +83,40 @@ test('every danger level has an official label in both languages', () => {
     assert.ok(DANGER_LABELS.en[level], `missing en label for ${level}`);
   }
 });
+
+test('a nearby fire is reported with distance and direction', () => {
+  const s = { ...SUMMARY, fires: [
+    { id: 'a', lat: 43.20, lon: 5.93, frp_total: 900, detections: 12,
+      industrial: false, in_country: true },
+  ] };
+  const d = describeFr({ summary: s, point: TOULON, lang: 'fr' });
+  assert.ok(d.fire, 'a fire 9 km away must be reported');
+  assert.equal(d.fire.km, 9);
+  // "Chaleur", not "feu": a satellite detects heat. Calling every detection a
+  // fire is the overclaim the industrial mask exists to prevent.
+  assert.ok(d.facts.some((f) => /chaleur/i.test(f.label) && /km/.test(f.value)));
+});
+
+test('an industrial source is never reported as a nearby fire', () => {
+  const s = { ...SUMMARY, fires: [
+    { id: 'b', lat: 43.13, lon: 5.94, frp_total: 400, detections: 90,
+      industrial: true, in_country: true },
+  ] };
+  const d = describeFr({ summary: s, point: TOULON, lang: 'fr' });
+  assert.equal(d.fire, null, 'a refinery next door is not a wildfire');
+});
+
+test('a fire outside France is not the fire near you', () => {
+  const s = { ...SUMMARY, fires: [
+    { id: 'c', lat: 43.13, lon: 5.94, frp_total: 900, detections: 12,
+      industrial: false, in_country: false },
+  ] };
+  assert.equal(describeFr({ summary: s, point: TOULON, lang: 'fr' }).fire, null);
+});
+
+test('no detected fire never renders as being safe', () => {
+  const d = describeFr({ summary: { ...SUMMARY, fires: [] }, point: TOULON, lang: 'fr' });
+  assert.equal(d.fire, null);
+  const all = [d.headline, d.sub, ...d.facts.map((f) => `${f.label} ${f.value}`)].join(' ');
+  assert.doesNotMatch(all, /en sécurité|aucun danger|rien à craindre/i);
+});

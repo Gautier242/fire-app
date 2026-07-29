@@ -6,7 +6,10 @@
 // that require of you". Sharing one function would mean every future change to
 // Canadian evacuation logic risks the French path, and that logic is the part
 // most worth keeping simple.
-import { nearest } from './geo.js';
+import { bearingDeg, compassPoint, nearest } from './geo.js';
+
+// How close a detection has to be before the rail leads with it.
+const NEAR_KM = 30;
 
 // Météo-France's own wording. Not paraphrased: this is an official scale and
 // the public recognises the colours.
@@ -44,6 +47,15 @@ const ATMO_LABELS = {
 
 function pick(table, lang) {
   return table[lang === 'en' ? 'en' : 'fr'];
+}
+
+const DIR_FR = { N: 'nord', NE: 'nord-est', E: 'est', SE: 'sud-est',
+                 S: 'sud', SW: 'sud-ouest', W: 'ouest', NW: 'nord-ouest' };
+const DIR_EN = { N: 'north', NE: 'northeast', E: 'east', SE: 'southeast',
+                 S: 'south', SW: 'southwest', W: 'west', NW: 'northwest' };
+
+function t_dir(d, lang) {
+  return (lang === 'en' ? DIR_EN : DIR_FR)[d] || d;
 }
 
 /**
@@ -92,6 +104,23 @@ export function describeFr({ summary, point, lang = 'fr' }) {
     }
   }
 
+  // The nearest real wildfire. Industrial heat and fires across the border are
+  // excluded here and nowhere else — the map still draws them, but neither is
+  // the answer to "is there a fire near me".
+  const burning = ((summary && summary.fires) || [])
+    .filter((f) => !f.industrial && f.in_country !== false);
+  const near = nearest(point, burning);
+  let fire = null;
+  if (near && near.km <= NEAR_KM) {
+    fire = { km: Math.round(near.km), item: near.item,
+             direction: compassPoint(bearingDeg(point, near.item)) };
+    facts.unshift({
+      label: L === 'en' ? 'Nearest heat' : 'Chaleur la plus proche',
+      value: `${fire.km} km ${L === 'en' ? '' : 'au '}${t_dir(fire.direction, L)}`,
+      tone: 'bad',
+    });
+  }
+
   const station = nearest(point, (summary && summary.air_quality) || []);
   if (station && Number.isInteger(station.item.value)) {
     const v = station.item.value;
@@ -116,6 +145,7 @@ export function describeFr({ summary, point, lang = 'fr' }) {
 
   return {
     level,
+    fire,
     tomorrow,
     tone: level === null ? 'caution' : TONE[level],
     headline,

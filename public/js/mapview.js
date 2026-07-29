@@ -282,6 +282,61 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
         }).addTo(layers.danger);
       }
 
+      // Fire incidents. Size carries intensity, opacity carries whether this is
+      // France's problem or a neighbour's — a fire does not stop at a border,
+      // but the reader's question is about their own country.
+      layers.fires.clearLayers();
+      for (const fire of summary.fires || []) {
+        const foreign = fire.in_country === false;
+        // Industrial heat is drawn as a hollow square, never a glowing dot. It
+        // is real heat and hiding it would be dishonest, but it must not read as
+        // a wildfire at a glance.
+        const radius = Math.min(18, 5 + Math.sqrt(fire.frp_total || 0) / 3);
+        const marker = fire.industrial
+          ? L.rectangle([[fire.lat - 0.02, fire.lon - 0.02], [fire.lat + 0.02, fire.lon + 0.02]],
+              { color: '#90A5B2', weight: 1.5, fillOpacity: 0, dashArray: '3 3' })
+          : L.circleMarker([fire.lat, fire.lon], {
+              radius,
+              color: HEAT[2], fillColor: HEAT[1],
+              weight: 1, opacity: foreign ? 0.3 : 0.9,
+              fillOpacity: foreign ? 0.12 : 0.55,
+            });
+        const w = fire.wind;
+        marker.bindPopup(
+          fire.industrial
+            ? `<b>${labels.industrial}</b><br>${labels.industrialNote}`
+            : `<b>${labels.fire}</b><br>${Math.round(fire.frp_total)} MW · ${fire.detections} ${labels.detections}`
+              + (w ? `<br>${labels.wind}: ${w.wind_kmh} km/h → ${w.wind_toward}` : '')
+              + (fire.aircraft ? `<br><b>${fire.aircraft} ${labels.aircraftNear}</b>` : '')
+              + (foreign ? `<br><i>${labels.outside}</i>` : ''));
+        marker.addTo(layers.fires);
+      }
+
+      // Road closures. Bison Futé gives a point, not a line.
+      layers.closures.clearLayers();
+      for (const closure of summary.closures || []) {
+        if (closure.lat === null || closure.lon === undefined) continue;
+        L.circleMarker([closure.lat, closure.lon], {
+          radius: 7, color: '#FF4D6D', fillColor: '#FF4D6D',
+          weight: 2, fillOpacity: 0.75,
+        }).bindPopup(`<b>${closure.road} — ${closure.place}</b><br>${closure.headline || ''}`)
+          .addTo(layers.closures);
+      }
+
+      // Aircraft, as arrows pointing where they are heading.
+      layers.aircraft.clearLayers();
+      for (const plane of summary.aircraft || []) {
+        L.marker([plane.lat, plane.lon], {
+          icon: L.divIcon({
+            className: '', iconSize: [20, 20], iconAnchor: [10, 10],
+            html: `<div class="plane" style="transform:rotate(${plane.track || 0}deg)">➤</div>`,
+          }),
+        }).bindPopup(`<b>${plane.callsign || plane.id}</b>`
+          + (plane.role ? ` — ${plane.role}` : '')
+          + `<br>${plane.altitude_ft.toLocaleString()} ft`
+          + `<br><i>${labels.aircraftNote}</i>`).addTo(layers.aircraft);
+      }
+
       for (const station of summary.air_quality || []) {
         if (!Number.isInteger(station.value)) continue;
         // ATMO runs 1-6, not the Canadian 1-10+, so it gets its own banding.
