@@ -1,0 +1,58 @@
+{
+    "elevations": [
+        {
+            "lon": 6.153134,
+            "lat": 43.479662,
+            "z": 157.44,
+            "acc": "Variable suivant la source de mesure"
+        },
+        {
+            "lon": 6.4,
+            "lat": 43.479662,
+            "z": 143.8,
+            "acc": "Variable suivant la source de mesure"
+        },
+        {
+            "lon": 6.646866,
+            "lat": 43.479662,
+            "z": 30.5,
+            "acc": "Variable suivant la source de mesure"
+        },
+        {
+            "lon": 6.153134,
+            "lat": 43.3,
+            "z": 346.32,
+            "acc": "Variable suivant la source de mesure"
+        },
+        {
+            "lon": 6.4,
+            "lat": 43.3,
+            "z": 536.09,
+            "acc": "Variable suivant la source de mesure"
+        },
+        {
+            "lon": 6.646866,
+            "lat": 43.3,
+            "z": 0.0,
+            "acc": "Variable suivant la source de mesure"
+        },
+        {
+            "lon": 6.153134,
+            "lat": 43.120338,
+            "z": 6.21,
+            "acc": "Variable suivant la source de mesure"
+        },
+        {
+            "lon": 6.4,
+            "lat": 43.120338,
+            "z": 0.0,
+            "acc": "Variable suivant la source de mesure"
+        },
+        {
+            "lon": 6.646866,
+            "lat": 43.120338,
+            "z": -99999.0,
+            "acc": "Variable suivant la source de mesure"
+        }
+    ]
+}
