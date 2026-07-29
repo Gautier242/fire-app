@@ -1,0 +1,119 @@
+[
+  {
+    "nom": "L'Abergement-Clémenciat",
+    "code": "01001",
+    "codeDepartement": "01",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        4.9306,
+        46.1517
+      ]
+    },
+    "population": 860
+  },
+  {
+    "nom": "Nice",
+    "code": "06088",
+    "codeDepartement": "06",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        7.2528,
+        43.7032
+      ]
+    },
+    "population": 357737
+  },
+  {
+    "nom": "Marseillette",
+    "code": "11220",
+    "codeDepartement": "11",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        2.5438,
+        43.2119
+      ]
+    },
+    "population": 697
+  },
+  {
+    "nom": "Marseille",
+    "code": "13055",
+    "codeDepartement": "13",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        5.3806,
+        43.2803
+      ]
+    },
+    "population": 886040
+  },
+  {
+    "nom": "Marseilles-lès-Aubigny",
+    "code": "18139",
+    "codeDepartement": "18",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        2.9895,
+        47.07
+      ]
+    },
+    "population": 645
+  },
+  {
+    "nom": "Marseille-en-Beauvaisis",
+    "code": "60387",
+    "codeDepartement": "60",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        1.9532,
+        49.5774
+      ]
+    },
+    "population": 1409
+  },
+  {
+    "nom": "Paris",
+    "code": "75056",
+    "codeDepartement": "75",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        2.347,
+        48.8589
+      ]
+    },
+    "population": 2103778
+  },
+  {
+    "nom": "Toulon",
+    "code": "83137",
+    "codeDepartement": "83",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        5.9334,
+        43.1364
+      ]
+    },
+    "population": 179116
+  },
+  {
+    "nom": "Saint-Denis",
+    "code": "97411",
+    "codeDepartement": "974",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        55.4444,
+        -20.9434
+      ]
+    },
+    "population": 155634
+  }
+]
