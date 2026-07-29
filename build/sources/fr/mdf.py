@@ -46,7 +46,40 @@ def _level(raw):
 FIELDS = ("date", "num_dep", "niveau_j1", "niveau_j2", "nom_dep")
 
 
-def normalize(payload):
+def _centroid(feature):
+    """Mean vertex of the largest ring. Good enough to centre a 50 km zone.
+
+    Not a true centroid — a polygon's vertex mean drifts toward whichever edge
+    has more detail. At this radius that error is irrelevant, and a real
+    centroid would need shapely.
+    """
+    geom = feature.get("geometry") or {}
+    coords = geom.get("coordinates") or []
+    if geom.get("type") == "Polygon":
+        coords = [coords]
+    rings = [poly[0] for poly in coords if poly and poly[0]]
+    if not rings:
+        return None, None
+    ring = max(rings, key=len)
+    return (sum(p[1] for p in ring) / len(ring),
+            sum(p[0] for p in ring) / len(ring))
+
+
+def centroids(shapes):
+    """Map departement code to (lat, lon)."""
+    out = {}
+    for feature in (shapes or {}).get("features", []):
+        code = (feature.get("properties") or {}).get("code")
+        if not code:
+            continue
+        lat, lon = _centroid(feature)
+        if lat is not None:
+            out[str(code)] = (lat, lon)
+    return out
+
+
+def normalize(payload, shapes=None):
+    points = centroids(shapes)
     rows = []
     for row in csv.DictReader((payload or "").splitlines(), delimiter=";"):
         # A truncated row is malformed and gets dropped. DictReader leaves an
@@ -60,14 +93,20 @@ def normalize(payload):
         issued_at = (row.get("date") or "").strip()
         if not dep or not issued_at:
             continue
-        rows.append({
+        record = {
             "dep": dep,
             "name": (row.get("nom_dep") or "").strip(),
             "level_today": _level(row.get("niveau_j1")),
             "level_tomorrow": _level(row.get("niveau_j2")),
             "issued_at": issued_at,
             "source": "mdf",
-        })
+        }
+        # Omitted rather than null when we have no boundary for the département:
+        # absence beats a fabricated coordinate, and it keeps summary.json the
+        # same size for the callers that pass no shapes.
+        if dep in points:
+            record["lat"], record["lon"] = points[dep]
+        rows.append(record)
 
     if not rows:
         return []

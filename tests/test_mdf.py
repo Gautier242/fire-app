@@ -114,3 +114,20 @@ def test_every_level_has_an_official_label():
     assert sorted(LEVEL_LABELS) == [1, 2, 3, 4]
     for label in LEVEL_LABELS.values():
         assert label["colour"] and label["fr"]
+
+
+def test_normalized_rows_carry_a_centroid_for_zone_placement():
+    # build.zones needs somewhere to centre a zone. Without coordinates a
+    # high-danger departement is silently skipped.
+    import json
+
+    shapes = json.loads(Path("public/static/fr/departements.geojson").read_text(encoding="utf-8"))
+    records = normalize(FIXTURE, shapes=shapes)
+
+    var = by_dep(records)["83"]
+    assert 42.0 < var["lat"] < 44.5
+    assert 5.0 < var["lon"] < 7.5
+
+
+def test_coordinates_are_omitted_rather_than_guessed_when_shapes_are_absent():
+    assert normalize(FIXTURE)[0].get("lat") is None
