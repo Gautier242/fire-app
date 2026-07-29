@@ -5,6 +5,13 @@
 // Copy lives in COPY below, the same pattern as app-fr.js, and deliberately not
 // in i18n.js: that table is the Canadian one and tests-js/test_i18n.js asserts
 // its two key sets are exactly equal, so French-only keys would break it.
+//
+// The imagery catalogue and the Overpass zoom floor are imported rather than
+// restated: what this page lists is then exactly what the map ships, and a layer
+// swapped in imagery.js cannot leave a stale claim here.
+import { LAYERS } from './imagery.js';
+import { MIN_ZOOM } from './overpass.js';
+
 const LANG_KEY = 'fire-near-me.fr.lang';
 const $ = (id) => document.getElementById(id);
 
@@ -137,6 +144,71 @@ const COPY = {
     src_water_what: "Les points où les pompiers et les Canadairs se ravitaillent : bornes, citernes, retenues. C'est la seule couche destinée aux pompiers plutôt qu'aux habitants, et la plus morcelée de l'application.",
     src_water_where: "Chaque registre vient du SDIS ou de la collectivité qui le publie, via data.gouv.fr. Ce fichier est reconstruit avec les autres, mais il ne bouge que quand un SDIS met son registre à jour — c'est-à-dire rarement.",
 
+    /* ---- la vue locale : vent, relief, fond de carte, imagerie, modèle ---- */
+
+    h_local: 'La vue locale et ce qui la nourrit',
+    local_intro: "La vue à 50 km autour d'un point utilise des sources que la carte nationale n'a pas besoin d'ouvrir : le vent à haute résolution, le relief, le fond de carte officiel, les images satellites datées, et un modèle de propagation. Le dernier est un calcul et non une observation ; il est décrit en dernier, en détail, parce que c'est celui qui peut tromper.",
+    lbl_layers: 'Couches proposées', lbl_model: 'Modèle', lbl_validated: 'Validé',
+    lbl_reference: 'Référence', lbl_fuel: 'Combustible supposé', lbl_horizon: 'Horizon',
+    lbl_zone: 'Lu dans la zone', lbl_zoom: 'Zoom minimal', lbl_resolution: 'Résolution',
+    not_validated: 'Non validé contre un feu réel',
+    zone_absent: 'Aucune zone pré-construite en ce moment',
+
+    arome_h: 'AROME 1,3 km — vent et rafales, via Open-Meteo',
+    arome_p1: "Le modèle à haute résolution de Météo-France, à 1,3 km de maille, heure par heure. Nous le lisons par l'API gratuite d'Open-Meteo : pas de clé, pas de compte, pas de quota payant. La carte nationale se contente d'un vent à environ 11 km pour une heure ; ici c'est la prévision sur les heures qui viennent, à la résolution à laquelle un feu réagit.",
+    arome_p2: "Ce sont les RAFALES qui font courir un feu, pas la moyenne. Mesuré à Lacanau le 29 juillet 2026 : 8,8 km/h de vent moyen contre 32,0 km/h de rafales. Une projection calculée sur la seule moyenne serait fausse d'un facteur proche de quatre, et c'est pourquoi la rafale est affichée à côté du vent moyen partout où elle apparaît.",
+    arome_limits: [
+      "C'est une prévision, pas une mesure : personne ne relève le vent dans votre rue.",
+      "Le vent est donné à 10 m de hauteur, puis réduit à la hauteur de flamme par le modèle. Cette réduction est une approximation de plus.",
+      "Une valeur par heure. Une rafale de trois minutes n'y figure pas, et c'est parfois elle qui fait la journée.",
+    ],
+    arome_zone: (hours, mean, gust) => `${hours} h de prévision : jusqu'à ${mean} km/h de vent moyen, jusqu'à ${gust} km/h de rafales`,
+
+    alti_h: 'IGN RGE ALTI — altitude et pente',
+    alti_p1: "L'altitude publiée par l'IGN, gratuite et sans clé. Elle sert à calculer la pente, parce qu'un feu monte beaucoup plus vite qu'il ne se propage à plat : le modèle de Rothermel utilise tan(pente) au carré, donc une pente sous-estimée sous-estime la vitesse de façon très non linéaire. Un habitant a besoin de savoir qu'un feu en dessous de chez lui arrive plus tôt que la distance sur la carte ne le suggère.",
+    alti_limits: [
+      "Échantillonnée sur une grille grossière, pas au 1 m : un talus, un ravin, une piste en corniche n'y sont pas. Une zone de 50 km au mètre représenterait des milliards de points.",
+      "La pente n'est pas une propriété du sol seul mais de la distance sur laquelle on la mesure : changer le pas d'échantillonnage change le chiffre. L'échelle fait partie de la réponse.",
+      "Hors couverture, le service renvoie −99999 au lieu d'une absence. Lu tel quel ce serait une falaise de cent kilomètres, donc la valeur est écartée. À l'inverse 0 n'est pas une absence : c'est le niveau de la mer.",
+    ],
+
+    geopf_h: 'IGN Plan v2 et photographie aérienne — data.geopf.fr',
+    geopf_p1: "Le fond de carte officiel français (IGN Plan v2) et l'orthophotographie à 20 cm, servis par la Géoplateforme de l'IGN sans clé ni compte. C'est ce qui permet de lire le nom de sa rue et de reconnaître son propre toit, ce qu'aucun fond de carte mondial ne fait aussi bien en France. La même plateforme fournit la recherche d'adresse de ce site.",
+    geopf_limits: [
+      "La photographie aérienne a plusieurs années : elle montre le terrain, jamais le feu du jour.",
+      "Couverture française. Un feu de l'autre côté de la frontière est affiché, mais sur un fond de carte qui s'arrête.",
+    ],
+
+    osm_h: 'OpenStreetMap via Overpass — bâtiments et rues',
+    osm_p1: "Les bâtiments et les rues, chargés uniquement pour ce qui est visible à l'écran, jamais pour la France entière. C'est de l'arithmétique et non une préférence : la densité mesurée près de Lacanau est de 123 bâtiments/km², donc un rayon de 50 km représente environ 966 000 bâtiments et un rayon de 100 km environ 3,85 millions — ni Overpass ni un navigateur ne le supportent. Le même contenu par écran fait environ 7 400 bâtiments au zoom 13 et 490 au zoom 15.",
+    osm_limits: [
+      "Rien n'est chargé en dessous du zoom indiqué ci-dessous : plus loin, un écran couvre plus de terrain qu'Overpass n'en rend.",
+      "Overpass est un service bénévole et gratuit. Une requête par déplacement de carte, jamais sans cadre, jamais sans délai maximal.",
+      "OpenStreetMap est contributif : une maison neuve ou une piste forestière peut manquer, et l'absence d'un bâtiment ne veut pas dire qu'il n'y a personne.",
+    ],
+
+    gibs_h: 'NASA GIBS — les images satellites datées',
+    gibs_p1: "Les couches satellites que vous pouvez choisir, avec leur date, servies par NASA GIBS. Résolution et fréquence s'échangent : VIIRS et MODIS repassent tous les jours mais voient à 375 m et 250 m, tandis que les couches à 30 m sont nettes mais ne revoient un endroit donné que tous les quelques jours.",
+    gibs_p2: "Sentinel-2 à 10 m est la couche la plus fine disponible ici, mais c'est un COMPOSITE ANNUEL et non l'image du jour. Une image Sentinel-2 datée exige un compte Copernicus que ce projet n'a pas : ce n'est pas une limite technique, c'est une inscription qui n'a pas été faite. L'étiquette de la couche le dit au lieu de laisser croire qu'elle est actuelle.",
+    gibs_p3: "Deux couches prévues au départ n'ont pas survécu à la vérification sur une vraie tuile. Landsat WELD est vivante mais son étendue temporelle s'arrête en 2001 : comme option « mensuelle à 30 m » elle serait restée définitivement blanche, et elle est remplacée par HLS L30, le même capteur à la même résolution, daté chaque jour. Et toutes les couches d'anomalies thermiques MODIS et VIIRS ne sont plus publiées qu'en tuiles vectorielles, qu'un Leaflet sans extension ne sait pas dessiner ; à leur place, OPERA DIST-ALERT montre la végétation détruite à 30 m, qui est justement ce qui rend visible la progression d'un feu quand on remonte les dates. Les détections de feu elles-mêmes ne sont pas perdues : elles arrivent en points par FIRMS.",
+    gibs_p4: "Une tuile absente à une date donnée n'est pas une panne : cela veut dire qu'aucun satellite n'est passé sur ce carré ce jour-là. La tuile reste blanche, ce qui est la lecture honnête de « personne n'a regardé ».",
+
+    spread_h: 'Le modèle de propagation — Rothermel 1972',
+    spread_p1: "La projection de propagation est la seule chose sur cette carte qui ne soit pas une observation. C'est un calcul. Le modèle est celui de Rothermel (1972), le modèle de propagation de feu de surface le plus utilisé au monde, implémenté dans la notation d'Andrews 2018 (RMRS-GTR-371) qui le reformule.",
+    spread_p2: "Ce qui est affirmé ici est étroit et vérifiable : c'est une implémentation correcte d'un modèle publié et relu par des pairs. Elle est contrôlée contre la valeur publiée du RMRS-GTR-371, page 59, table 17, première ligne — 81,6 ft/min publiés, 24,876 m/min calculés, soit un écart de 0,02 %. Les valeurs intermédiaires de la même ligne (densité apparente, taux de compacité, facteur de vent) sont reproduites elles aussi.",
+    spread_p3: "Ce qui n'est PAS affirmé : ce modèle n'est validé contre aucun comportement de feu réel. Personne sur ce projet ne peut le faire, et un feu réel dépend de la végétation exacte, de l'humidité du sol, du relief fin et de l'action des secours, dont rien n'est ici. La projection est indicative, et seulement indicative. Elle ne remplace jamais les consignes officielles : en cas de danger, ce sont la préfecture, les pompiers et FR-Alert qui décident, pas cette carte.",
+    spread_limits: [
+      "Un seul modèle de combustible pour toute la zone (FM5, garrigue basse), là où la végétation réelle change tous les cent mètres. C'est la plus grosse imprécision du calcul.",
+      "Une seule classe de combustible mort à 1 heure, quand le modèle complet en pondère plusieurs. L'écart compte surtout en maquis mélangé.",
+      "L'humidité du combustible est estimée depuis l'humidité de l'air. Elle n'est pas mesurée.",
+      "Deux arcs et non une ligne : un sur le vent moyen, un sur les rafales. Une ligne unique impliquerait une précision que ce modèle n'a pas.",
+      "Aucun saut de feu par braises, aucun effet de cheminée, aucune action de lutte.",
+    ],
+    spread_ref: 'Andrews 2018, RMRS-GTR-371, p. 59, table 17 — écart 0,02 %',
+    spread_validated: (validated) => (validated
+      ? 'Le fichier de données déclare cette projection validée.'
+      : "Lu dans le fichier de données : validated = false. Cette page ne l'écrit pas à la main, elle le lit là où le calcul le publie."),
+
     h_cannot: 'Ce que cette carte ne peut pas faire',
     cannot_intro: "C'est la section la plus importante de cette page. Ce que cette carte ignore compte autant que ce qu'elle montre, et rien ici n'est adouci.",
 
@@ -210,6 +282,71 @@ const COPY = {
     src_water_what: 'Where crews and water bombers refill: hydrants, tanks, ponds. It is the only layer aimed at firefighters rather than residents, and the most fragmented data in the app.',
     src_water_where: 'Each register comes from the SDIS or authority that publishes it, through data.gouv.fr. This file is rebuilt with the others, but it only changes when an SDIS updates its register — which is to say rarely.',
 
+    /* ---- the local view: wind, terrain, base map, imagery, model ---- */
+
+    h_local: 'The local view and what feeds it',
+    local_intro: 'The 50 km view around a point uses sources the national map never needs to open: high-resolution wind, terrain, the official base map, dated satellite imagery, and a spread model. The last one is a calculation rather than an observation; it is described last and in detail, because it is the one that can mislead.',
+    lbl_layers: 'Layers offered', lbl_model: 'Model', lbl_validated: 'Validated',
+    lbl_reference: 'Reference', lbl_fuel: 'Assumed fuel', lbl_horizon: 'Horizon',
+    lbl_zone: 'Read from the zone', lbl_zoom: 'Minimum zoom', lbl_resolution: 'Resolution',
+    not_validated: 'Not validated against real fire',
+    zone_absent: 'No pre-built zone right now',
+
+    arome_h: 'AROME 1.3 km — wind and gusts, via Open-Meteo',
+    arome_p1: "Météo-France's high-resolution model, on a 1.3 km grid, hour by hour. We read it through Open-Meteo's free endpoint: no key, no account, no paid quota. The national map makes do with wind at roughly 11 km for a single hour; this is the forecast over the coming hours, at the resolution a fire actually responds to.",
+    arome_p2: 'GUSTS are what drive a fire run, not the average. Measured at Lacanau on 2026-07-29: mean wind 8.8 km/h against gusts of 32.0 km/h. A projection computed on the mean alone would be wrong by close to a factor of four, which is why the gust is shown beside the mean everywhere it appears.',
+    arome_limits: [
+      'It is a forecast, not a measurement: nobody is reading the wind in your street.',
+      'Wind is given at 10 m and then reduced to flame height by the model. That reduction is one more approximation.',
+      'One value per hour. A three-minute gust is not in it, and sometimes that is the gust that makes the day.',
+    ],
+    arome_zone: (hours, mean, gust) => `${hours} h of forecast: up to ${mean} km/h mean wind, up to ${gust} km/h gusts`,
+
+    alti_h: 'IGN RGE ALTI — elevation and slope',
+    alti_p1: 'Elevation published by IGN, free and keyless. It is used to compute slope, because fire runs uphill far faster than it spreads on the flat: the Rothermel model uses tan(slope) squared, so an underestimated slope underestimates speed very non-linearly. A resident needs to know that a fire below them arrives sooner than the map distance suggests.',
+    alti_limits: [
+      'Sampled on a coarse grid, not at 1 m: a bank, a gully, a cliff-edge track are not in it. A 50 km zone at one metre would be billions of points.',
+      'Slope is not a property of the ground alone but of the distance it is measured over: change the sampling step and the number changes. The scale is part of the answer.',
+      'Outside coverage the service returns −99999 instead of an absence. Read literally that is a hundred-kilometre cliff, so the value is discarded. Conversely 0 is not missing: it is sea level.',
+    ],
+
+    geopf_h: 'IGN Plan v2 and aerial imagery — data.geopf.fr',
+    geopf_p1: "France's official base map (IGN Plan v2) and the 20 cm orthophoto, served by IGN's Géoplateforme with no key and no account. This is what lets you read your own street name and recognise your own roof, which no global base map does as well in France. The same platform provides this site's address search.",
+    geopf_limits: [
+      'The aerial photography is several years old: it shows the ground, never today’s fire.',
+      'French coverage. A fire across the border is still drawn, but on a base map that stops.',
+    ],
+
+    osm_h: 'OpenStreetMap via Overpass — buildings and streets',
+    osm_p1: 'Buildings and streets, loaded only for what is visible on screen, never for the whole of France. That is arithmetic rather than preference: measured density near Lacanau is 123 buildings/km², so a 50 km radius is about 966,000 buildings and a 100 km radius about 3.85 million — neither loadable by Overpass nor survivable by a browser. The same data by viewport is roughly 7,400 buildings at zoom 13 and 490 at zoom 15.',
+    osm_limits: [
+      'Nothing is loaded below the zoom shown below: further out, one screen covers more ground than Overpass will return.',
+      'Overpass is a free, volunteer-run service. One query per map move, never without a bounding box, never without a timeout.',
+      'OpenStreetMap is contributed: a new house or a forest track can be missing, and a missing building does not mean nobody is there.',
+    ],
+
+    gibs_h: 'NASA GIBS — the dated satellite imagery',
+    gibs_p1: 'The satellite layers you can choose, with their date, served by NASA GIBS. Resolution and cadence trade against each other: VIIRS and MODIS come back every day but see at 375 m and 250 m, while the 30 m layers are sharp but only revisit a given place every few days.',
+    gibs_p2: 'Sentinel-2 at 10 m is the sharpest layer here, but it is an ANNUAL COMPOSITE, not today’s image. A dated Sentinel-2 scene needs a Copernicus account this project does not have: that is not a technical limit, it is a registration nobody did. The layer’s own label says so rather than letting it read as current.',
+    gibs_p3: 'Two layers planned at the start did not survive being checked against a real tile. Landsat WELD is alive but its time extent ends in 2001: as a "monthly 30 m" option it would have been permanently blank, and it is replaced by HLS L30 — the same sensor at the same resolution, dated daily. And every MODIS and VIIRS thermal-anomaly layer is now published as vector tiles only, which a Leaflet with no plugin cannot draw; in their place OPERA DIST-ALERT shows vegetation loss at 30 m, which is exactly what makes a burn’s progress visible when you scrub the date back. The fire detections themselves are not lost: they arrive as points through FIRMS.',
+    gibs_p4: 'A missing tile on a given date is not a fault: it means no satellite passed over that square that day. The tile stays blank, which is the honest rendering of "nobody looked".',
+
+    spread_h: 'The spread model — Rothermel 1972',
+    spread_p1: 'The spread projection is the only thing on this map that is not an observation. It is a calculation. The model is Rothermel (1972), the most widely used surface fire spread model in the world, implemented in the notation of Andrews 2018 (RMRS-GTR-371), which restates it.',
+    spread_p2: 'What is claimed here is narrow and checkable: it is a correct implementation of a published, peer-reviewed model. It is checked against the published value in RMRS-GTR-371, page 59, table 17, first row — 81.6 ft/min published against 24.876 m/min computed, a deviation of 0.02%. The intermediate values in the same row (bulk density, packing ratio, wind factor) are reproduced too.',
+    spread_p3: 'What is NOT claimed: this model is not validated against any real fire behaviour. Nobody on this project can do that, and a real fire depends on the exact vegetation, soil moisture, fine terrain and the action of the crews, none of which is here. The projection is indicative, and only indicative. It never replaces official instructions: in danger it is the prefecture, the fire service and FR-Alert that decide, not this map.',
+    spread_limits: [
+      'One fuel model for the whole zone (FM5, low garrigue), where real vegetation changes every hundred metres. It is the largest inaccuracy in the calculation.',
+      'A single dead 1-hour fuel class, where the full model weights several. The gap matters most in mixed maquis.',
+      'Fuel moisture is estimated from air humidity. It is not measured.',
+      'Two arcs rather than one line: one on the mean wind, one on gusts. A single line would imply a precision this model does not have.',
+      'No ember spotting, no chimney effect, no suppression.',
+    ],
+    spread_ref: 'Andrews 2018, RMRS-GTR-371, p. 59, table 17 — deviation 0.02%',
+    spread_validated: (validated) => (validated
+      ? 'The data file declares this projection validated.'
+      : 'Read from the data file: validated = false. This page does not write that by hand, it reads it where the calculation publishes it.'),
+
     h_cannot: 'What this map cannot do',
     cannot_intro: 'This is the most important section on the page. What this map cannot see matters as much as what it shows, and none of it is softened here.',
 
@@ -267,6 +404,7 @@ let lang = load(LANG_KEY) || 'fr';
 let summary = null;
 let flares = null;
 let water = null;
+let zone = null;       // one pre-built zone, for the local view's live numbers
 let waterState = '';   // '', 'loading', or an error message
 
 const c = () => COPY[lang === 'en' ? 'en' : 'fr'];
@@ -391,6 +529,81 @@ function renderWaterCard() {
     </section>`;
 }
 
+/* ---------------- 1b. the local view's own sources ---------------- */
+
+// Same shape as renderSource, for sources that carry no fetch record of their
+// own: the base map, the imagery tiles and Overpass are fetched by the browser
+// when you look at them, and the spread model is computed rather than fetched.
+function card(title, paras, limits, rows) {
+  return `
+    <section class="src">
+      <div class="prose">
+        <h3>${esc(title)}</h3>
+        ${paras.filter(Boolean).map((p) => `<p>${esc(p)}</p>`).join('')}
+        ${limits && limits.length ? `<p><b>${esc(c().lbl_limits)}</b></p>${bullets(limits)}` : ''}
+      </div>
+      ${rows ? `<dl class="facts">${rows}</dl>` : ''}
+    </section>`;
+}
+
+function renderLocal() {
+  // Read out of a real pre-built zone where there is one. With no zone the rows
+  // say so: an invented gust would be the exact failure this page exists to
+  // prevent, and the local view still works by fetching live.
+  const wind = (zone && zone.wind) || [];
+  const projection = ((zone && zone.spread) || [])[0] || null;
+  const worst = (key) => num(Math.max(...wind.map((row) => row[key] || 0)));
+
+  const aromeRows = wind.length
+    ? fact(c().lbl_zone, esc(c().arome_zone(wind.length, worst('wind_kmh'), worst('gust_kmh'))))
+    : fact(c().lbl_zone, esc(c().zone_absent));
+
+  const layerRows = LAYERS.map((layer) => `
+      <div class="fact area">
+        <dt>${esc(pick(layer.label))}</dt>
+        <dd><span style="color:var(--faint)">${esc(layer.attribution)}</span></dd>
+      </div>`).join('');
+
+  // The model's own claim about itself, read where it is published rather than
+  // asserted here. A payload that ever said validated=true would show up here.
+  const validated = projection
+    ? `<span class="tag ${projection.validated ? 'safe' : 'caution'}"><i></i>${
+      esc(projection.validated ? c().lbl_validated : c().not_validated)}</span>`
+    : esc(c().zone_absent);
+
+  return `
+    <div class="prose">
+      <h2>${esc(c().h_local)}</h2>
+      <p>${esc(c().local_intro)}</p>
+    </div>
+    ${card(c().arome_h, [c().arome_p1, c().arome_p2], c().arome_limits,
+    aromeRows +
+      fact(c().lbl_host, '<span style="color:var(--faint)">api.open-meteo.com</span>') +
+      fact(c().lbl_page, link('https://open-meteo.com/en/docs/meteofrance-api', 'open-meteo.com')))}
+    ${card(c().alti_h, [c().alti_p1], c().alti_limits,
+    fact(c().lbl_host, '<span style="color:var(--faint)">data.geopf.fr</span>') +
+      fact(c().lbl_page, link('https://geoservices.ign.fr/rgealti', 'geoservices.ign.fr')))}
+    ${card(c().geopf_h, [c().geopf_p1], c().geopf_limits,
+    fact(c().lbl_host, '<span style="color:var(--faint)">data.geopf.fr</span>') +
+      fact(c().lbl_page, link('https://geoservices.ign.fr/', 'geoservices.ign.fr')))}
+    ${card(c().osm_h, [c().osm_p1], c().osm_limits,
+    fact(c().lbl_zoom, esc(String(MIN_ZOOM))) +
+      fact(c().lbl_host, '<span style="color:var(--faint)">overpass-api.de</span>') +
+      fact(c().lbl_page, link('https://www.openstreetmap.org/copyright', 'openstreetmap.org')))}
+    ${card(c().gibs_h, [c().gibs_p1, c().gibs_p2, c().gibs_p3, c().gibs_p4], null,
+    fact(c().lbl_layers, esc(num(LAYERS.length))) + layerRows +
+      fact(c().lbl_page, link('https://worldview.earthdata.nasa.gov/', 'earthdata.nasa.gov')))}
+    ${card(c().spread_h,
+    [c().spread_p1, c().spread_p2, c().spread_p3,
+      projection ? c().spread_validated(projection.validated) : null],
+    c().spread_limits,
+    fact(c().lbl_model, esc(projection ? projection.model : c().zone_absent)) +
+      fact(c().lbl_validated, validated) +
+      fact(c().lbl_fuel, esc(projection ? projection.fuel_model : c().zone_absent)) +
+      fact(c().lbl_horizon, esc(projection ? `${projection.hours} h` : c().zone_absent)) +
+      fact(c().lbl_reference, esc(c().spread_ref)))}`;
+}
+
 /* ---------------- 2. what it cannot do ---------------- */
 
 function renderWaterCoverage() {
@@ -512,6 +725,7 @@ function render() {
     ${sources.map(renderSource).join('')}
     ${renderCuratedCard()}
     ${renderWaterCard()}
+    ${renderLocal()}
     ${renderCannot()}
     ${renderDots()}
     ${renderNot()}`;
@@ -562,6 +776,20 @@ fetch('data/summary.json', { cache: 'no-cache' })
     $('content').innerHTML =
       `<div class="prose"><h1>${esc(c().title)}</h1><p class="bad">${esc(c().failed_page(error.message))}</p></div>`;
   });
+
+// One pre-built zone, so the local-view section can quote a real gust and read
+// the spread model's own `validated` flag instead of restating it. Zones are an
+// optimisation and may legitimately be absent; the section then says so.
+fetch('data/zones/index.json', { cache: 'no-cache' })
+  .then((r) => (r.ok ? r.json() : null))
+  .then((index) => {
+    const first = ((index && index.zones) || [])[0];
+    if (!first) return null;
+    return fetch(`data/zones/${first.id}.json`, { cache: 'no-cache' })
+      .then((r) => (r.ok ? r.json() : null));
+  })
+  .then((data) => { zone = data; render(); })
+  .catch(() => { /* the local section then reports no pre-built zone */ });
 
 // The industrial-mask history. Small, and it is what lets section 3 state how
 // many days of observation exist instead of implying the mask is already working.

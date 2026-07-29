@@ -63,6 +63,25 @@ jobs:
           OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
         run: python -m build.main --out public/fr/data --country fr
 
+      # Zones are an optimisation: the browser fetches the same data live, so a
+      # missing zone index costs speed and offline availability, never coverage.
+      # Reported rather than fatal - it must not block publishing the danger
+      # level or the fire layer.
+      - name: Report pre-built zones
+        continue-on-error: true
+        run: |
+          python - <<'EOF'
+          import json, pathlib
+          index = pathlib.Path("public/fr/data/zones/index.json")
+          if not index.exists():
+              print("no zone index written; the local view will fetch live everywhere")
+          else:
+              zones = json.loads(index.read_text())["zones"]
+              print(f"pre-built zones: {len(zones)}")
+              for z in zones:
+                  print(f"  {z['id']:14} {z['reason']:8} r={z['radius_km']}km")
+          EOF
+
       # A stale section with an honest timestamp is publishable. A section that
       # is empty *because its fetch failed* is not - deploying that would show
       # an all-clear map. Blocking here leaves the last good deploy serving.
