@@ -200,6 +200,8 @@ dd.air { color: var(--air); }
   display: flex; justify-content: space-between; gap: 10px;
   font-family: var(--mono); font-size: 0.67rem; color: var(--faint);
 }
+.rail-foot a { color: var(--muted); text-underline-offset: 3px; white-space: nowrap; }
+.rail-foot a:hover { color: var(--accent); }
 .live { display: inline-flex; align-items: center; gap: 6px; }
 .live i { width: 6px; height: 6px; border-radius: 50%; background: var(--safe); }
 .live.stale i { background: var(--caution); }

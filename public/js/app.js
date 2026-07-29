@@ -45,7 +45,6 @@ function renderFreshness() {
   $('freshness-text').textContent = age === null
     ? t(lang, 'stale_warning')
     : t(lang, 'updated', { minutes: age }) + (stale ? ` — ${t(lang, 'stale_warning')}` : '');
-  $('source-count').textContent = t(lang, 'sources_count', { n: (summary.sources || []).length });
 }
 
 function renderRail() {
@@ -95,11 +94,6 @@ function renderRail() {
     official.hidden = true;
   }
 
-  $('freshness').className = d.stale ? 'live stale' : 'live';
-  $('freshness-text').textContent = d.age === null
-    ? t(lang, 'stale_warning')
-    : t(lang, 'updated', { minutes: d.age }) + (d.stale ? ` — ${t(lang, 'stale_warning')}` : '');
-  $('source-count').textContent = t(lang, 'sources_count', { n: (summary.sources || []).length });
 }
 
 function applyMode() {
