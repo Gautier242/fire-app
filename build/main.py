@@ -11,7 +11,9 @@ from pathlib import Path
 from build import registry
 from build.http import make_session
 from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis, cwfis_history, opensky
-from build.sources.fr import atmo, mdf
+from build.sources.fr import atmo, firms, mdf, water, wind
+from build.sources.fr import roads as fr_roads
+from build import flares
 
 # Which summary section each source populates, per country.
 #
@@ -36,6 +38,8 @@ SECTIONS = {
     "fr": {
         "mdf": "danger",
         "atmo": "air_quality",
+        "firms": "fires",
+        "bison_fute": "closures",
         "opensky": "aircraft",
     },
 }
@@ -61,6 +65,8 @@ def fetchers_for(country, session):
         return {
             "mdf": lambda: mdf.normalize(mdf.fetch(session)),
             "atmo": lambda: atmo.normalize(atmo.fetch(session)),
+            "firms": lambda: firms.normalize(firms.fetch(session)),
+            "bison_fute": lambda: fr_roads.normalize(fr_roads.fetch(session)),
             "opensky": lambda: opensky.normalize(opensky.fetch(session, bbox=opensky.FRANCE)),
         }
     raise ValueError(f"unknown country {country!r}")
@@ -132,6 +138,101 @@ def build(now, previous, fetchers, country="ca"):
     }
 
 
+def write_side_file(out, name, fetcher):
+    """Write a lazy-loaded layer, or leave the previous one alone.
+
+    Some layers are far too big for the summary — the water points are 532 KB
+    gzipped against a 150 KB budget — and are only ever fetched by a reader who
+    asks for them. A failure here must not touch the summary: a missing layer is
+    an inconvenience, a missing danger level is not.
+    """
+    try:
+        payload = fetcher()
+    except Exception:  # noqa: BLE001 - the summary is what matters
+        return None
+    _write_atomically(Path(out) / name, payload)
+    return payload
+
+
+def apply_france_extras(summary, session, out, previous_flares):
+    """Everything that can only happen once the French sections are assembled.
+
+    Wind and aircraft both attach to fire incidents, so they cannot run inside a
+    fetcher — the incidents do not exist yet at that point.
+    """
+    day = summary["generated_at"][:10]
+
+    # Industrial heat is marked before anything else consumes the fires, so no
+    # downstream step can mistake a refinery for a wildfire.
+    registry = flares.FlareRegistry.from_payload(previous_flares)
+    registry.observe(summary.get("fires", []), day=day)
+    summary["fires"] = flares.mask_incidents(summary.get("fires", []), registry)
+    _write_atomically(Path(out) / "flares.json", registry.payload())
+
+    # A bounding box is not a border: the FIRMS query reaches into Spain,
+    # Belgium, Germany and Italy, and Leon came back as the largest French fire.
+    shapes_path = Path("public/static/fr/departements.geojson")
+    if shapes_path.exists():
+        summary["fires"] = flares.tag_country(
+            summary["fires"], json.loads(shapes_path.read_text()))
+    else:
+        for incident in summary["fires"]:
+            incident.setdefault("in_country", True)
+
+    wildfires = [f for f in summary["fires"]
+                 if not f["industrial"] and f.get("in_country", True)]
+
+    # Wind is the observed answer to "which way is this going", so it belongs to
+    # the incident rather than to the country. Biggest fires first: the fetch is
+    # capped and the tail is dropped, not split into a second call.
+    ranked = sorted(wildfires, key=lambda f: -(f.get("frp_total") or 0))
+    points = [(f["lat"], f["lon"]) for f in ranked[:wind.MAX_POINTS]]
+    if points:
+        try:
+            readings = wind.normalize(wind.fetch(session, points))
+            for incident, reading in zip(ranked, readings):
+                if reading:
+                    incident["wind"] = reading
+        except Exception:  # noqa: BLE001 - a fire without wind is still a fire
+            pass
+
+    # Aircraft are matched against real wildfires only. An aircraft circling a
+    # refinery flare is not fighting a fire.
+    summary["aircraft"] = opensky.near_fires(summary.get("aircraft", []), wildfires)
+    engaged = aircraft_engagement(summary["aircraft"], wildfires)
+    for incident in summary["fires"]:
+        incident["aircraft"] = engaged.get(incident["id"], 0)
+
+    return summary
+
+
+# An aircraft this close and this low over a fire is working, not transiting.
+ENGAGED_KM = 10.0
+ENGAGED_ALTITUDE_FT = 5000
+
+
+def aircraft_engagement(aircraft, wildfires):
+    """Count low aircraft near each incident.
+
+    This is an observation about aircraft, never a claim about the response. The
+    absence of aircraft means nothing at all — they do not fly at night, and the
+    France box held zero Securite Civile callsigns at 07:00 and MILAN78 at 17:30
+    the same day. The UI must never let an empty count read as "nobody is
+    coming".
+    """
+    counts = {}
+    for incident in wildfires:
+        near = 0
+        for plane in aircraft:
+            if (plane.get("altitude_ft") or 0) > ENGAGED_ALTITUDE_FT:
+                continue
+            if opensky._km_between(plane["lat"], plane["lon"],
+                                   incident["lat"], incident["lon"]) <= ENGAGED_KM:
+                near += 1
+        counts[incident["id"]] = near
+    return counts
+
+
 def write_history(out, fetcher):
     """Write the 72-hour replay beside the summary, or leave the old one alone.
 
@@ -176,7 +277,12 @@ def main():
     # circling a fire is information. France has no fire detection until FIRMS is
     # wired, so its aircraft list is empty rather than unfiltered — showing every
     # low-flying aircraft in France would imply a response that is not happening.
-    if "aircraft" in summary:
+    if country == "fr":
+        flares_path = out / "flares.json"
+        previous_flares = (json.loads(flares_path.read_text())
+                           if flares_path.exists() else None)
+        summary = apply_france_extras(summary, session, out, previous_flares)
+    elif "aircraft" in summary:
         summary["aircraft"] = opensky.near_fires(summary["aircraft"], summary.get("fires", []))
 
     _write_atomically(summary_path, summary)
@@ -187,6 +293,12 @@ def main():
     failed = [s["id"] for s in summary["sources"] if not s["ok"]]
     if failed:
         print(f"WARNING: stale sources: {', '.join(failed)}")
+
+    if country == "fr":
+        water_layer = write_side_file(
+            out, "water.json", lambda: water.normalize(water.fetch(session)))
+        if water_layer:
+            print(f"wrote {out / 'water.json'} ({len(water_layer.get('points', []))} water points)")
 
     if country == "ca":
         history = write_history(out, lambda: cwfis_history.normalize(cwfis_history.fetch(session)))
