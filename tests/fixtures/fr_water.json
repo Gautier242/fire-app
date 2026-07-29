@@ -1,0 +1,119 @@
+{
+  "_comment": "Real records trimmed from the live sources on 2026-07-29, plus a few deliberately broken ones. The Lambert-93 x/y columns on sdis64 and annecy are kept exactly as published: they are the trap this fixture exists to pin down.",
+
+  "sdis64": {
+    "type": "FeatureCollection",
+    "features": [
+      {"type": "Feature",
+       "geometry": {"type": "Point", "coordinates": [-0.2662202962, 43.1721113547]},
+       "properties": {"insee": "64417", "id_sdis": "644170027", "type_pei": "Poteau Incendie",
+                      "x": 434298.6257, "y": 6235815.7661,
+                      "lon": -0.2662202962321912, "lat": 43.17211135468871}},
+      {"type": "Feature",
+       "geometry": {"type": "Point", "coordinates": [-1.5760081182, 43.3588069175]},
+       "properties": {"insee": "64495", "id_sdis": "644950083", "type_pei": "Réserve incendie",
+                      "x": 329053.948, "y": 6261825.724}},
+      {"type": "Feature",
+       "geometry": {"type": "Point", "coordinates": [-0.9012, 43.2811]},
+       "properties": {"insee": "64102", "id_sdis": "641020011", "type_pei": "Autre",
+                      "x": 384112.5, "y": 6248990.1}},
+      {"type": "Feature",
+       "geometry": null,
+       "properties": {"insee": "64417", "id_sdis": "644170099", "type_pei": "Poteau Incendie",
+                      "x": 434300.0, "y": 6235800.0}},
+      {"type": "Feature",
+       "geometry": {"type": "Point", "coordinates": [434298.6257, 6235815.7661]},
+       "properties": {"insee": "64417", "id_sdis": "644170100", "type_pei": "Poteau Incendie"}}
+    ]
+  },
+
+  "sdis81": {
+    "type": "FeatureCollection",
+    "features": [
+      {"type": "Feature",
+       "geometry": {"coordinates": [2.165803, 43.889673], "type": "Point"},
+       "properties": {"commune_insee": 81218, "numero_long": "950-0001",
+                      "type_hydrant": "poteau", "volume_pa": null,
+                      "debit_1bar": 92.0, "autonomie_minutes": 2068}},
+      {"type": "Feature",
+       "geometry": {"coordinates": [1.8146, 43.595789], "type": "Point"},
+       "properties": {"commune_insee": 81162, "numero_long": "162-0003",
+                      "type_hydrant": "point_aspiration", "volume_pa": 120.0,
+                      "debit_1bar": null, "autonomie_minutes": 413}},
+      {"type": "Feature",
+       "geometry": {"coordinates": [2.0031, 43.9271], "type": "Point"},
+       "properties": {"commune_insee": 81004, "numero_long": "004-0012",
+                      "type_hydrant": "bouche", "volume_pa": 0,
+                      "debit_1bar": 60.0, "autonomie_minutes": 0}}
+    ]
+  },
+
+  "herault_dfci": {
+    "type": "FeatureCollection",
+    "features": [
+      {"type": "Feature",
+       "geometry": {"coordinates": [2.715103688205132, 43.3988045625536], "type": "Point"},
+       "properties": {"n_eau_1": "AVM0046", "nature": "CI", "capacite": 20}},
+      {"type": "Feature",
+       "geometry": {"coordinates": [2.6547988357219636, 43.63794482117874], "type": "Point"},
+       "properties": {"n_eau_1": "CAS0006", "nature": "RE", "capacite": null}}
+    ]
+  },
+
+  "rennes": {
+    "type": "FeatureCollection",
+    "features": [
+      {"type": "Feature",
+       "geometry": {"coordinates": [[-1.608720359731, 48.088758203880666]], "type": "MultiPoint"},
+       "properties": {"id_pei_sdis": "35055-0034", "code_insee": "35055",
+                      "type": "Poteau incendie de 100mm", "diam_pei": 100}},
+      {"type": "Feature",
+       "geometry": {"coordinates": [[-1.7412, 48.1503]], "type": "MultiPoint"},
+       "properties": {"id_pei_sdis": "35206-0002", "code_insee": "35206",
+                      "type": "Plan d'eau naturel", "diam_pei": null}},
+      {"type": "Feature",
+       "geometry": {"coordinates": [], "type": "MultiPoint"},
+       "properties": {"id_pei_sdis": "35055-9999", "code_insee": "35055",
+                      "type": "Réservoir artificiel souple", "diam_pei": null}}
+    ]
+  },
+
+  "angers": {
+    "type": "FeatureCollection",
+    "features": [
+      {"type": "Feature",
+       "geometry": {"coordinates": [-0.5972008552, 47.456347676], "type": "Point"},
+       "properties": {"type": "PI", "num_pompier": "1364", "codeinsee": "49007", "debit": 135}},
+      {"type": "Feature",
+       "geometry": {"coordinates": [-0.6104, 47.4712], "type": "Point"},
+       "properties": {"type": "CITERNE", "num_pompier": "1400", "codeinsee": "49007", "debit": null}},
+      {"type": "Feature",
+       "geometry": {"coordinates": [-0.5511, 47.4029], "type": "Point"},
+       "properties": {"type": "PRISERIV", "num_pompier": "1401", "codeinsee": "49099", "debit": null}},
+      {"type": "Feature",
+       "geometry": {"coordinates": [-0.5490, 47.4001], "type": "Point"},
+       "properties": {"type": null, "num_pompier": "1402", "codeinsee": "49007", "debit": null}}
+    ]
+  },
+
+  "saintave": {
+    "type": "FeatureCollection",
+    "features": [
+      {"type": "Feature",
+       "geometry": {"coordinates": [-2.765805354143203, 47.69952057321529], "type": "Point"},
+       "properties": {"gestion": "public", "diametre": 100}},
+      {"type": "Feature",
+       "geometry": {"coordinates": [-2.7712, 47.7031], "type": "Point"},
+       "properties": {"gestion": "public", "diametre": 80}}
+    ]
+  },
+
+  "annecy": "insee,id_sdis,id_gestion,ref_terr,type_pei,diam_pei,situation,debit,x,y,lon,lat\n74010,74010-0001,GRAND ANNECY,MARCELLAZ,PI,NULL, ,NULL,930979.3,6526051.95,5.97412,45.79494\n74011,74011-0002,GRAND ANNECY,POISY,CI,NULL, ,NULL,934587.83,6528837.19,6.02191,45.81877\n73008,73008-0001,GRAND ANNECY,ENTRELACS,BS,NULL, ,NULL,934722.77,6528845.88,6.02366,45.81880\nNULL,NULL,GRAND ANNECY,INCONNU,PA,NULL, ,NULL,934800.00,6528900.00,6.02500,45.82000\n",
+
+  "larochelle": "ID,PI_NUM,PI_ADRESSE,PI_DIAMETRE,PI_DEBIT,PI_TYPE,COORDINATES\n80c7e101,300-002,RN 237 Repentie (Route),200                 ,60,BI 150,\" 46.168854, -1.219538\"\n80c7e102,300-003,Rue du Port,150                 ,60,Citerne 120m3,\" 46.157001, -1.151220\"\n80c7e103,300-004,Quai Valin,150                 ,60,Indéterminé,\" 46.153300, -1.146700\"\n80c7e104,300-005,Sans position,150                 ,60,BI 100,\n",
+
+  "sixt": "COLL_NOM;COLL_INSEE;ID_PEI;TYPE_PEI;ADRESSE_PEI;STATUT;DEBIT_PEI_m3parheure;LAT_PEI;LONG_PEI\n\"Mairie de Sixt-sur-Aff\";35328;328-0001;\"Poteau d'Incendie\";\"Trohinat\";;60,0;-2,00927;47,75654\n\"Mairie de Sixt-sur-Aff\";35328;328-0004;\"Puisard\";\"Le Bois\";;;-2,01455;47,76102\n",
+
+  "empty_geojson": {"type": "FeatureCollection", "features": []},
+  "empty_csv": "insee,id_sdis,type_pei,lon,lat\n"
+}
