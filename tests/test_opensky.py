@@ -30,6 +30,20 @@ def test_airliners_at_cruise_are_not_aircraft_over_a_fire():
     assert normalize({"states": [state(baro=11000.0, geo=11000.0)]}) == []
 
 
+def test_scheduled_traffic_passing_over_a_fire_is_not_reported():
+    # Observed live: ACA223 at 8000 ft / 233 kt and WJA793 at 11400 ft were both
+    # within 50 km of a fire. They are airliners on a normal routing, and
+    # drawing them over a fire implies a response that is not happening.
+    airliner = state(callsign="ACA223", baro=2440.0, velocity=120.0)  # 8000 ft, 233 kt
+    assert normalize({"states": [airliner]}) == []
+
+
+def test_a_fast_aircraft_low_enough_to_be_working_is_still_reported():
+    # Air tankers run fast on a drop run; altitude is what separates them.
+    tanker = state(callsign="TANKER42", baro=400.0, velocity=105.0)  # 1300 ft, 204 kt
+    assert len(normalize({"states": [tanker]})) == 1
+
+
 def test_aircraft_on_the_ground_are_dropped():
     assert normalize({"states": [state(on_ground=True)]}) == []
 

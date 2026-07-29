@@ -91,6 +91,8 @@ export function createMap(elementId) {
     alerts: L.layerGroup(),
     closures: L.layerGroup(),
     aqhi: L.layerGroup(),
+    history: L.layerGroup(),
+    aircraft: L.layerGroup(),
     satellite: gibs,
   };
 
@@ -151,6 +153,7 @@ export function createMap(elementId) {
       layers.alerts.clearLayers();
       layers.closures.clearLayers();
       layers.aqhi.clearLayers();
+      layers.aircraft.clearLayers();
 
       for (const fire of summary.fires || []) {
         const tone = fire.named
@@ -217,6 +220,44 @@ export function createMap(elementId) {
         geo.bindPopup(`<b>${closure.name || 'Road closure'}</b><br>${closure.headline || ''}`);
         geo.addTo(layers.closures);
       }
+
+      // Aircraft are arrows pointing where they are heading — a third shape,
+      // distinct from a fire's dot and a boundary's outline.
+      for (const plane of summary.aircraft || []) {
+        const marker = L.marker([plane.lat, plane.lon], {
+          icon: L.divIcon({
+            className: '', iconSize: [20, 20], iconAnchor: [10, 10],
+            html: `<div class="plane" style="transform:rotate(${plane.track || 0}deg)">➤</div>`,
+          }),
+          alt: plane.callsign || plane.id,
+        });
+        const lang = document.documentElement.lang === 'fr' ? 'fr' : 'en';
+        marker.bindPopup(
+          `<b>${plane.callsign || plane.id}</b><br>`
+          + `${plane.altitude_ft.toLocaleString()} ft`
+          + (plane.speed_kt ? ` · ${plane.speed_kt} kt` : '')
+          + `<br><i>${lang === 'fr'
+            ? "Aéronef volant bas près d'un feu. Son rôle n'est pas confirmé."
+            : 'Flying low near a fire. What it is doing is not confirmed.'}</i>`);
+        marker.addTo(layers.aircraft);
+      }
+    },
+
+    // One satellite pass, with the passes before it faded so the direction of
+    // growth is visible rather than remembered.
+    drawHistory(points) {
+      layers.history.clearLayers();
+      for (const p of points) {
+        const fade = [1, 0.45, 0.2][p.age] ?? 0.15;
+        L.circleMarker([p.lat, p.lon], {
+          radius: p.age === 0 ? 6 : 4,
+          color: HEAT[p.band] || HEAT[0],
+          fillColor: HEAT[p.band] || HEAT[0],
+          weight: 0,
+          fillOpacity: (p.foreign ? 0.25 : 1) * fade,
+          interactive: false,
+        }).addTo(layers.history);
+      }
     },
 
     setYou(point) {
@@ -230,10 +271,6 @@ export function createMap(elementId) {
         alt: 'Your location',
       }).addTo(map);
       map.setView([point.lat, point.lon], 8);
-    },
-
-    hasClosures(summary) {
-      return Array.isArray(summary.closures) && summary.closures.length > 0;
     },
 
     invalidate() { map.invalidateSize(); },

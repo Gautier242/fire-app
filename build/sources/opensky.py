@@ -19,9 +19,14 @@ STATES_URL = "https://opensky-network.org/api/states/all"
 # Canada, as a bounding box. Costs 4 credits per call.
 BBOX = {"lamin": 41.0, "lamax": 84.0, "lomin": -141.0, "lomax": -52.0}
 
-# Airliners cruise near 11 000 m. Firefighting aircraft work far below that, and
-# so does anything on approach — proximity to a fire does the rest of the work.
-MAX_ALTITUDE_M = 3500.0
+# Altitude is the only usable discriminator. ADS-B carries no role, and a first
+# pass at 3500 m surfaced ACA223 and WJA793 crossing a fire on normal routings —
+# drawing those implies a response that is not happening. Firefighting runs
+# happen low: tankers drop under 1000 ft and birddogs orbit around 3000 ft.
+# 1800 m (~5900 ft) keeps those and drops scheduled traffic.
+# ponytail: altitude alone. Cross-referencing the Aircraft Database for type
+# would be exact, but it is a second API and a daily download.
+MAX_ALTITUDE_M = 1800.0
 
 # How close an aircraft must be to a known fire to be worth drawing at all.
 NEAR_FIRE_KM = 50.0

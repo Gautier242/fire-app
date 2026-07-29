@@ -294,6 +294,36 @@ dd.air { color: var(--air); }
 }
 .seg.basemap { margin-left: auto; }
 
+/* The scrubber sits above the dial, only in Advanced. It steps through the
+   satellite passes that exist rather than 72 clock hours, most of which hold
+   no observation at all. */
+.scrubber {
+  position: absolute; z-index: 500; bottom: 74px; left: 13px;
+  width: min(340px, calc(100% - 26px)); padding: 11px 13px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(9px);
+  border: 1px solid var(--line); border-radius: var(--r);
+}
+.scrubber[hidden] { display: none; }
+.scrub-head, .scrub-foot {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  font-family: var(--mono); font-size: 0.65rem; color: var(--faint);
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+.scrub-head b {
+  color: var(--ink); font-size: 0.78rem; text-transform: none; letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.scrub-foot { text-transform: none; letter-spacing: 0; margin-top: 5px; }
+#scrub { width: 100%; margin: 9px 0 0; accent-color: var(--heat-2); min-height: 24px; }
+
+.plane {
+  font-size: 17px; line-height: 1; color: var(--accent);
+  text-shadow: 0 0 5px var(--ground);
+}
+.sw.plane { background: var(--accent); clip-path: polygon(50% 0, 100% 100%, 50% 76%, 0 100%); }
+.sw.hist { background: linear-gradient(90deg, var(--heat-1), var(--heat-3)); }
+
 .detail-dial {
   position: absolute; z-index: 500; bottom: 13px; left: 13px;
 }

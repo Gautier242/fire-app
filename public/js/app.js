@@ -4,10 +4,11 @@ import { t, STRINGS } from './i18n.js';
 import { locateBrowser, provinceAt, savePlace, savedPlace, searchPlaces } from './location.js';
 import { createMap } from './mapview.js';
 import { describe } from './rail.js';
+import { observedPasses, passLabel, pointsForPass, windAt, windToward } from './history.js';
 
 const MODE_KEY = 'fire-near-me.mode';
 const LANG_KEY = 'fire-near-me.lang';
-const ADVANCED_ONLY = ['satellite', 'closures', 'aqhi'];
+const ADVANCED_ONLY = ['satellite', 'closures', 'aqhi', 'aircraft', 'history'];
 
 const $ = (id) => document.getElementById(id);
 
@@ -106,11 +107,14 @@ function applyMode() {
     b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
   });
   document.querySelectorAll('.chip[data-adv]').forEach((c) => {
-    const available = c.dataset.layer !== 'closures'
-      || (summary && view && view.hasClosures(summary));
+    // A chip for a layer with nothing in it is a promise the data cannot keep.
+    const section = { closures: 'closures', aircraft: 'aircraft' }[c.dataset.layer];
+    const available = !section || (summary && (summary[section] || []).length > 0);
     c.hidden = (mode !== 'advanced') || !available;
     if (c.hidden) view && view.toggle(c.dataset.layer, false);
   });
+  // The scrubber belongs to the history layer and follows it out of Advanced.
+  if (mode !== 'advanced') $('scrubber').hidden = true;
   // Advanced-only layers switch off entirely when we leave advanced.
   if (mode !== 'advanced' && view) ADVANCED_ONLY.forEach((n) => view.toggle(n, false));
   else if (view) {
@@ -155,6 +159,66 @@ function adopt(p, label) {
 function loadPlaces() {
   if (!places) places = loadJSON('static/places.json');
   return places;
+}
+
+/* ---------------- spread scrubber ---------------- */
+
+let historyLoad = null;   // the in-flight or settled fetch
+let history = null;       // the parsed payload, once it arrives
+let passes = [];
+
+// 45 KB gzipped, and only the Advanced view ever draws it, so it is fetched the
+// first time the layer is switched on rather than at page load. The promise is
+// cached, not the result, so toggling twice cannot start a second download.
+function ensureHistory() {
+  if (!historyLoad) historyLoad = loadJSON('data/history.json').catch(() => null);
+  return historyLoad;
+}
+
+function renderPass(index) {
+  if (!passes.length || !history) return;
+  const hour = passes[index];
+  const points = pointsForPass(history, passes, index);
+  view.drawHistory(points);
+
+  $('scrub-when').textContent = passLabel(history, hour, lang);
+  $('scrub-count').textContent = t(lang, 'scrub_count',
+    { n: points.filter((p) => p.age === 0).length });
+
+  // Wind belongs to the pass being shown, not to now.
+  const wind = windAt(history, hour);
+  $('scrub-wind').textContent = wind
+    ? t(lang, 'scrub_wind', {
+        speed: Math.round(wind.speed),
+        toward: t(lang, `dir_${windToward(wind.direction)}`),
+      })
+    : '';
+}
+
+async function showScrubber(on) {
+  const box = $('scrubber');
+  if (!on) { box.hidden = true; return; }
+
+  const data = await ensureHistory();
+  if (!data || !data.points) {
+    box.hidden = false;
+    $('scrub-when').textContent = t(lang, 'scrub_none');
+    return;
+  }
+  history = data;
+  passes = observedPasses(data);
+  if (!passes.length) {
+    box.hidden = false;
+    $('scrub-when').textContent = t(lang, 'scrub_none');
+    return;
+  }
+
+  const slider = $('scrub');
+  slider.max = String(passes.length - 1);
+  slider.value = String(passes.length - 1); // newest pass first
+  slider.oninput = () => renderPass(Number(slider.value));
+  box.hidden = false;
+  renderPass(passes.length - 1);
 }
 
 function wirePicker() {
@@ -220,6 +284,7 @@ async function boot() {
       const on = c.getAttribute('aria-pressed') !== 'true';
       c.setAttribute('aria-pressed', String(on));
       view.toggle(c.dataset.layer, on);
+      if (c.dataset.layer === 'history') showScrubber(on);
     };
   });
   $('lang').onclick = () => {
