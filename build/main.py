@@ -10,7 +10,7 @@ from pathlib import Path
 
 from build import registry
 from build.http import make_session
-from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis
+from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis, cwfis_history
 
 # Which summary section each source populates.
 SECTIONS = {
@@ -91,6 +91,22 @@ def build(now, previous, fetchers):
     }
 
 
+def write_history(out, fetcher):
+    """Write the 72-hour replay beside the summary, or leave the old one alone.
+
+    The history is a separate file because it is lazy-loaded by the Advanced
+    view only, and because it must stay outside the summary's size budget. A
+    failure here is not allowed to touch the summary: a replay nobody can see
+    is an inconvenience, an evacuation map nobody can see is not.
+    """
+    try:
+        payload = fetcher()
+    except Exception:  # noqa: BLE001 - the summary is what matters
+        return None
+    _write_atomically(Path(out) / "history.json", payload)
+    return payload
+
+
 def _write_atomically(path, payload):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
@@ -107,8 +123,9 @@ def main():
     summary_path = out / "summary.json"
     previous = json.loads(summary_path.read_text()) if summary_path.exists() else None
 
+    session = make_session()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    summary = build(now=now, previous=previous, fetchers=default_fetchers(make_session()))
+    summary = build(now=now, previous=previous, fetchers=default_fetchers(session))
     _write_atomically(summary_path, summary)
 
     failed = [s["id"] for s in summary["sources"] if not s["ok"]]
@@ -119,6 +136,14 @@ def main():
           f"{len(summary['closures'])} road closures)")
     if failed:
         print(f"WARNING: stale sources: {', '.join(failed)}")
+
+    history = write_history(out, lambda: cwfis_history.normalize(cwfis_history.fetch(session)))
+    if history:
+        hours = len({point[2] for point in history["points"]})
+        print(f"wrote {out / 'history.json'} "
+              f"({len(history['points'])} hotspots across {hours} observed hours)")
+    else:
+        print("WARNING: history unavailable; the scrubber will fall back to the last file")
 
 
 if __name__ == "__main__":
