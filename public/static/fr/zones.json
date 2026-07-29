@@ -1,0 +1,10 @@
+{
+  "_readme": "Which places get pre-built hyper-local detail. Anything not listed here still works — the browser fetches it live on demand — but a listed zone is instant and available offline. Add a departement or a city you care about to `always`. `auto_danger_min` picks up anywhere at that Meteo des forets level or above, today or tomorrow, so somewhere nobody pinned still gets detail on the day it matters.",
+  "auto_danger_min": 3,
+  "radius_km": 50,
+  "max_zones": 6,
+  "always": [
+    { "id": "gironde", "label": "Bordeaux et Gironde", "lat": 44.8378, "lon": -0.5792 },
+    { "id": "landes", "label": "Landes", "lat": 44.0000, "lon": -0.7667 }
+  ]
+}
