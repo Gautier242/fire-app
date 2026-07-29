@@ -6,7 +6,8 @@ export const STRINGS = {
     check_button: 'Check fires near me',
     checking: 'Checking…',
     locate_failed: 'We could not find your location. Please choose your community.',
-    choose_place: 'Choose your community',
+    choose_place: 'Or search for a town',
+    search_hint: 'Town or city name',
 
     badge_safe: 'All clear',
     badge_caution: 'Take care',
@@ -72,7 +73,8 @@ export const STRINGS = {
     check_button: 'Vérifier les feux près de moi',
     checking: 'Vérification…',
     locate_failed: "Nous n'avons pas pu trouver votre position. Veuillez choisir votre municipalité.",
-    choose_place: 'Choisissez votre municipalité',
+    choose_place: 'Ou cherchez une municipalité',
+    search_hint: 'Nom de la ville ou du village',
 
     badge_safe: 'Rien à signaler',
     badge_caution: 'Prudence',

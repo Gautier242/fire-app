@@ -129,6 +129,7 @@ function applyLanguage() {
   });
   $('locate').textContent = t(lang, 'check_button');
   $('picker-label').textContent = t(lang, 'choose_place');
+  $('place-search').placeholder = t(lang, 'search_hint');
   $('lang').textContent = lang === 'en' ? 'Français' : 'English';
   $('change-place').textContent = lang === 'en' ? 'Change' : 'Changer';
   renderRail();
@@ -139,28 +140,39 @@ function applyLanguage() {
 function adopt(p, label) {
   point = p;
   $('locate').hidden = true;
-  $('picker').hidden = true;
   $('place').hidden = false;
   $('place-name').textContent = label
     || `${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}`;
+  $('place-search').value = '';
+  $('place-results').innerHTML = '';
   if (view) view.setYou(p);
   renderRail();
 }
 
-async function showPicker() {
-  $('picker').hidden = false;
-  $('locate').hidden = true;
-  if (!places) places = await loadJSON('static/places.json');
+// The gazetteer is 1.9 MB, so it is fetched on the first keystroke rather than
+// at page load. Caching the promise, not the result, keeps fast typing from
+// starting a second download.
+function loadPlaces() {
+  if (!places) places = loadJSON('static/places.json');
+  return places;
+}
+
+function wirePicker() {
   const input = $('place-search');
   const results = $('place-results');
-  input.value = '';
-  results.innerHTML = '';
-  input.oninput = () => {
+  input.oninput = async () => {
+    const list = await loadPlaces();
+    // Re-read the value after the await: the first keystroke waits on a 1.9 MB
+    // download, by which time the query has usually moved on.
+    const matches = searchPlaces(input.value, list, 8);
     results.innerHTML = '';
-    for (const place of searchPlaces(input.value, places, 8)) {
+    for (const place of matches) {
       const li = document.createElement('li');
       const button = document.createElement('button');
-      button.innerHTML = `${place.n} <span>${place.p}</span>`;
+      button.textContent = place.n;
+      const prov = document.createElement('span');
+      prov.textContent = ` ${place.p}`;
+      button.append(prov);
       button.onclick = () => {
         savePlace(place);
         adopt({ lat: place.lat, lon: place.lon }, `${place.n}, ${place.p}`);
@@ -169,7 +181,10 @@ async function showPicker() {
       results.append(li);
     }
   };
-  input.focus();
+}
+
+function showPicker() {
+  $('place-search').focus();
 }
 
 async function locate() {
@@ -214,6 +229,7 @@ async function boot() {
   };
   $('locate').onclick = locate;
   $('change-place').onclick = showPicker;
+  wirePicker();
 
   // OS themes flip at sunset. Without this the rail follows and the basemap
   // does not, leaving a dark panel against a white map.
