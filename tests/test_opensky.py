@@ -38,6 +38,22 @@ def test_scheduled_traffic_passing_over_a_fire_is_not_reported():
     assert normalize({"states": [airliner]}) == []
 
 
+def test_scheduled_carriers_are_excluded_by_callsign():
+    # Observed live: JZA448 (Jazz) and WJA1555 (WestJet) passed the altitude
+    # filter on approach. Altitude cannot separate a descending airliner from a
+    # working aircraft, but the operator can.
+    for callsign in ("JZA448", "WJA1555", "ACA223", "FLE2855"):
+        assert normalize({"states": [state(callsign=callsign, baro=400.0)]}) == []
+
+
+def test_a_registration_marked_aircraft_is_kept():
+    # Canadian working aircraft usually fly under their registration, and an
+    # excluded one is a water bomber we failed to show. Keep anything not on
+    # the scheduled-carrier list.
+    assert len(normalize({"states": [state(callsign="CGEJG", baro=400.0)]})) == 1
+    assert len(normalize({"states": [state(callsign="TANKER42", baro=400.0)]})) == 1
+
+
 def test_a_fast_aircraft_low_enough_to_be_working_is_still_reported():
     # Air tankers run fast on a drop run; altitude is what separates them.
     tanker = state(callsign="TANKER42", baro=400.0, velocity=105.0)  # 1300 ft, 204 kt

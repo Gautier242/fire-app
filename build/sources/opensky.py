@@ -31,6 +31,21 @@ MAX_ALTITUDE_M = 1800.0
 # How close an aircraft must be to a known fire to be worth drawing at all.
 NEAR_FIRE_KM = 50.0
 
+# Scheduled passenger carriers, by ICAO callsign prefix. Altitude alone cannot
+# tell a descending airliner from a working aircraft — JZA448 and WJA1555 both
+# passed the ceiling on approach — but the operator can.
+#
+# This is a denylist rather than an allowlist on purpose: a scheduled flight
+# shown by mistake is clutter, a water bomber hidden by mistake is the thing
+# somebody opened the map to see. Anything not named here is kept.
+# ponytail: callsign prefixes. The OpenSky Aircraft Database has operator and
+# type per airframe, which would be exact, but it is a second API and a daily
+# download.
+SCHEDULED = (
+    "ACA", "JZA", "WJA", "WEN", "POE", "TSC", "SWG", "FLE", "WSW",  # Canada
+    "AAL", "UAL", "DAL", "SWA", "ASA", "SKW", "JBU", "FFT", "NKS",  # US
+)
+
 M_TO_FT = 3.28084
 MS_TO_KT = 1.94384
 EARTH_KM = 6371.0
@@ -79,6 +94,8 @@ def normalize(payload):
             if altitude is None or altitude > MAX_ALTITUDE_M:
                 continue
             callsign = (state[CALLSIGN] or "").strip() or None
+            if callsign and callsign.upper().startswith(SCHEDULED):
+                continue
             aircraft.append({
                 "id": state[ICAO],
                 "callsign": callsign,
