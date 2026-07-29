@@ -120,3 +120,39 @@ test('no detected fire never renders as being safe', () => {
   const all = [d.headline, d.sub, ...d.facts.map((f) => `${f.label} ${f.value}`)].join(' ');
   assert.doesNotMatch(all, /en sécurité|aucun danger|rien à craindre/i);
 });
+
+test('an evacuation order covering you is the headline, above danger', () => {
+  const s = { ...SUMMARY,
+    evacuations: [{ insee: '83137', kind: 'order', name: 'Toulon',
+                    polygons: [[[[5.9, 43.1], [6.0, 43.1], [6.0, 43.2], [5.9, 43.2], [5.9, 43.1]]]],
+                    source_url: 'https://www.var.gouv.fr/x' }],
+    evacuation_curation: { curated: true, departements: ['83'], stale: false } };
+  const d = describeFr({ summary: s, point: TOULON, lang: 'fr' });
+  assert.match(d.headline, /évacuation/i);
+  assert.equal(d.tone, 'danger');
+});
+
+test('a watched departement with no order may say so', () => {
+  const s = { ...SUMMARY, evacuations: [],
+    evacuation_curation: { curated: true, departements: ['83'], stale: false } };
+  const d = describeFr({ summary: s, point: TOULON, lang: 'fr' });
+  assert.ok(d.facts.some((f) => /évacuation/i.test(f.label)));
+});
+
+test('an unwatched departement never claims there is no order', () => {
+  const s = { ...SUMMARY, evacuations: [],
+    evacuation_curation: { curated: true, departements: ['33'], stale: false } };
+  const d = describeFr({ summary: s, point: TOULON, lang: 'fr' });
+  const all = [d.headline, d.sub, ...d.facts.map((f) => `${f.label} ${f.value}`)].join(' ');
+  assert.doesNotMatch(all, /aucun ordre/i);
+  // The FR-Alert statement carries the whole weight here and stays mandatory.
+  assert.ok(d.alert);
+});
+
+test('stale curation is not trusted as a negative', () => {
+  const s = { ...SUMMARY, evacuations: [],
+    evacuation_curation: { curated: true, departements: ['83'], stale: true } };
+  const d = describeFr({ summary: s, point: TOULON, lang: 'fr' });
+  const all = d.facts.map((f) => `${f.label} ${f.value}`).join(' ');
+  assert.doesNotMatch(all, /aucun ordre/i);
+});

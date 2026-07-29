@@ -11,7 +11,7 @@ from pathlib import Path
 from build import registry
 from build.http import make_session
 from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis, cwfis_history, opensky
-from build.sources.fr import atmo, firms, mdf, water, wind
+from build.sources.fr import atmo, evac, firms, mdf, water, wind
 from build.sources.fr import roads as fr_roads
 from build import flares
 
@@ -161,6 +161,17 @@ def apply_france_extras(summary, session, out, previous_flares):
     fetcher — the incidents do not exist yet at that point.
     """
     day = summary["generated_at"][:10]
+
+    # Curated evacuation orders. Not a fetcher: there is no feed to fetch, so a
+    # person maintains the list and the payload carries who, when, and which
+    # departements are actually being watched. Absence of an order is only
+    # sayable inside a watched departement.
+    curation = evac.load(Path("public/static/fr/evacuations.json"))
+    shapes_file = Path("public/static/fr/communes-shapes.json")
+    commune_shapes = (json.loads(shapes_file.read_text())
+                      if shapes_file.exists() else {})
+    summary["evacuations"] = evac.normalize(curation, commune_shapes)
+    summary["evacuation_curation"] = evac.curation_status(curation)
 
     # Industrial heat is marked before anything else consumes the fires, so no
     # downstream step can mistake a refinery for a wildfire.

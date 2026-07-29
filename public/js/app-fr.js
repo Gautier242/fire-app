@@ -51,6 +51,7 @@ const COPY = {
     industrial: 'Source industrielle',
     industrialNote: 'Brûle au même endroit tous les jours. Ce n\'est pas un feu de forêt.',
     outside: 'Hors de France',
+    evacOrder: "ORDRE D'ÉVACUATION", evacAlert: "ALERTE d'évacuation",
   },
   en: {
     locate: 'Check near me', checking: 'Checking…',
@@ -67,6 +68,7 @@ const COPY = {
     industrial: 'Industrial source',
     industrialNote: 'Burns at the same spot every day. Not a wildfire.',
     outside: 'Outside France',
+    evacOrder: 'EVACUATION ORDER', evacAlert: 'Evacuation ALERT',
   },
 };
 
@@ -161,6 +163,7 @@ function drawMap() {
     wind: c().wind, aircraftNear: c().aircraftNear, aircraftNote: c().aircraftNote,
     industrial: c().industrial, industrialNote: c().industrialNote,
     outside: c().outside,
+    evacOrder: c().evacOrder, evacAlert: c().evacAlert,
     level: DANGER_LABELS[lang === 'en' ? 'en' : 'fr'],
   });
 }
@@ -294,7 +297,8 @@ async function boot() {
   ]);
 
   drawMap();
-  ['danger', 'fires', 'closures', 'aircraft'].forEach((n) => view.toggle(n, true));
+  ['danger', 'fires', 'closures', 'aircraft', 'orders', 'alerts']
+    .forEach((n) => view.toggle(n, true));
   renderRail();
 }
 

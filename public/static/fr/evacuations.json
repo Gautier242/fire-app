@@ -1,0 +1,11 @@
+{
+  "_readme": "Curated evacuation orders. France publishes no feed — orders go out over FR-Alert to phones, and préfecture arrêtés are PDFs. This file is maintained by hand from the préfecture announcements for the départements listed below. An empty orders list means somebody looked and found nothing IN THOSE DÉPARTEMENTS ONLY; anywhere else the map stays silent. Update curated_at every time you touch this, even if nothing changed — a list older than 12 hours is reported as stale rather than trusted.",
+  "_sources": {
+    "33": "https://www.gironde.gouv.fr/Actualites",
+    "40": "https://www.landes.gouv.fr/Actualites"
+  },
+  "curated_at": "2026-07-29T18:00:00Z",
+  "curated_by": "unmaintained — nobody is currently watching",
+  "departements": [],
+  "orders": []
+}

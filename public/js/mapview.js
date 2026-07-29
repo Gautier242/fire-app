@@ -103,6 +103,12 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
     aircraft: L.layerGroup(),
     danger: L.layerGroup(),
     satellite: gibs,
+    // Rain matters to a fire: it is the thing that stops one. RainViewer
+    // publishes a free radar mosaic, refreshed roughly every ten minutes.
+    rain: L.tileLayer(
+      'https://tilecache.rainviewer.com/v2/radar/nowcast_0/256/{z}/{x}/{y}/2/1_1.png',
+      { opacity: 0.6, maxZoom: 18,
+        attribution: 'Radar &copy; RainViewer' }),
   };
 
   let currentBase = 'plain';
@@ -280,6 +286,23 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
               : `<b>${name}</b><br>${labels.unavailable}`);
           },
         }).addTo(layers.danger);
+      }
+
+      // Curated evacuation zones. Order is solid, alert is dashed — the same
+      // form language as Canada, so the shape carries the meaning without colour.
+      layers.orders.clearLayers();
+      layers.alerts.clearLayers();
+      for (const zone of summary.evacuations || []) {
+        if (!zone.polygons || !zone.polygons.length) continue;
+        const isOrder = zone.kind === 'order';
+        L.polygon(
+          zone.polygons.map((rings) => rings.map((r) => r.map(([lon, lat]) => [lat, lon]))),
+          { color: isOrder ? '#E4344F' : '#E8A33D', weight: 3,
+            dashArray: isOrder ? null : '9 7',
+            fillOpacity: isOrder ? 0.22 : 0.12 })
+          .bindPopup(`<b>${zone.name}</b><br>${isOrder ? labels.evacOrder : labels.evacAlert}`
+            + (zone.note ? `<br>${zone.note}` : ''))
+          .addTo(isOrder ? layers.orders : layers.alerts);
       }
 
       // Fire incidents. Size carries intensity, opacity carries whether this is

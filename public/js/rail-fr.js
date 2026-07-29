@@ -6,7 +6,7 @@
 // that require of you". Sharing one function would mean every future change to
 // Canadian evacuation logic risks the French path, and that logic is the part
 // most worth keeping simple.
-import { bearingDeg, compassPoint, nearest } from './geo.js';
+import { bearingDeg, compassPoint, nearest, pointInMultiPolygon } from './geo.js';
 
 // How close a detection has to be before the rail leads with it.
 const NEAR_KM = 30;
@@ -58,6 +58,20 @@ function t_dir(d, lang) {
   return (lang === 'en' ? DIR_EN : DIR_FR)[d] || d;
 }
 
+// Mandatory and unconditional. France broadcasts evacuation orders by FR-Alert
+// straight to phones; this map cannot see them, and must never let its own
+// silence read as "no order exists".
+function alertStatement(summary, L) {
+  const coverage = ((summary && summary.coverage) || [])[0] || {};
+  return {
+    text: L === 'en'
+      ? 'Evacuation orders in France are sent by FR-Alert directly to your phone. This map cannot show them.'
+      : "Les ordres d'évacuation sont diffusés par FR-Alert directement sur votre téléphone. Cette carte ne peut pas les afficher.",
+    label: L === 'en' ? 'How FR-Alert works' : 'Comment fonctionne FR-Alert',
+    url: coverage.official_url || 'https://www.interieur.gouv.fr/Alerte/FR-Alert',
+  };
+}
+
 /**
  * Describe the situation for a point in France.
  * `point` carries lat/lon and, when known, the département code.
@@ -75,6 +89,47 @@ export function describeFr({ summary, point, lang = 'fr' }) {
   const facts = [];
   let headline;
   let sub = '';
+
+  // Evacuation comes first when we have it, because it is the only thing on this
+  // map that says "leave now". France publishes no feed, so this is a curated
+  // list and its three states must stay distinct: an order covering you, a
+  // watched departement with none, and silence.
+  const curation = (summary && summary.evacuation_curation) || {};
+  const watched = curation.curated && !curation.stale
+    && (curation.departements || []).includes(point && point.dep);
+  const covering = ((summary && summary.evacuations) || [])
+    .find((z) => z.polygons && z.polygons.length && pointInMultiPolygon(point, z.polygons));
+
+  if (covering) {
+    const isOrder = covering.kind === 'order';
+    return {
+      level, tomorrow, fire: null,
+      tone: isOrder ? 'danger' : 'caution',
+      headline: isOrder
+        ? (L === 'en'
+            ? 'You are in an area under an EVACUATION ORDER. Leave now and follow official instructions.'
+            : "Vous êtes dans une zone sous ORDRE D'ÉVACUATION. Partez maintenant et suivez les consignes officielles.")
+        : (L === 'en'
+            ? 'You are in an area under an evacuation ALERT. Be ready to leave quickly.'
+            : "Vous êtes dans une zone sous ALERTE d'évacuation. Soyez prêt à partir rapidement."),
+      sub: covering.note || covering.name,
+      facts: [{ label: L === 'en' ? 'Source' : 'Source',
+                value: covering.source_url ? (L === 'en' ? 'Préfecture' : 'Préfecture') : '—',
+                tone: 'bad' }],
+      evacuation: covering,
+      alert: alertStatement(summary, L),
+    };
+  }
+
+  if (watched) {
+    // Only sayable because somebody is actually reading this departement's
+    // prefecture announcements and touched the list within 12 hours.
+    facts.push({
+      label: L === 'en' ? 'Evacuations' : 'Évacuations',
+      value: L === 'en' ? 'None known' : 'Aucun ordre connu',
+      tone: 'ok',
+    });
+  }
 
   if (level === null) {
     // Overseas départements and any gap in publication land here. Saying
@@ -131,17 +186,7 @@ export function describeFr({ summary, point, lang = 'fr' }) {
     });
   }
 
-  // Mandatory and unconditional. France broadcasts evacuation orders by
-  // FR-Alert straight to phones; this map cannot see them, and must never let
-  // its silence read as "no order exists".
-  const coverage = ((summary && summary.coverage) || [])[0] || {};
-  const alert = {
-    text: L === 'en'
-      ? 'Evacuation orders in France are sent by FR-Alert directly to your phone. This map cannot show them.'
-      : "Les ordres d'évacuation sont diffusés par FR-Alert directement sur votre téléphone. Cette carte ne peut pas les afficher.",
-    label: L === 'en' ? 'How FR-Alert works' : 'Comment fonctionne FR-Alert',
-    url: coverage.official_url || 'https://www.interieur.gouv.fr/Alerte/FR-Alert',
-  };
+  const alert = alertStatement(summary, L);
 
   return {
     level,
