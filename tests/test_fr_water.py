@@ -1,3 +1,4 @@
+import base64
 import json
 from pathlib import Path
 
@@ -6,6 +7,19 @@ import pytest
 from build.sources.fr import water
 
 FIXTURE = json.loads(Path("tests/fixtures/fr_water.json").read_text())
+
+# The Hérault SDIS register ships as a GeoPackage, which is a SQLite database and
+# therefore stdlib-readable. The fixtures are real ones, built small.
+GPKG = {"herault_sdis": base64.b64decode(FIXTURE["herault_sdis_gpkg_b64"]),
+        "wgs84": base64.b64decode(FIXTURE["gpkg_wgs84_b64"]),
+        "webmercator": base64.b64decode(FIXTURE["gpkg_webmercator_b64"])}
+
+# Agde, Hérault: the reference point for the inverse Lambert-93.
+AGDE_L93 = (723894.42, 6262032.84)
+AGDE_WGS84 = (3.29510, 43.45699)
+
+# What a build actually normalizes: every source keyed as fetch() keys it.
+PAYLOAD = dict(FIXTURE, herault_sdis=GPKG["herault_sdis"])
 
 LON_MIN, LON_MAX = -5.5, 10.0
 LAT_MIN, LAT_MAX = 41.0, 51.5
@@ -22,7 +36,7 @@ def _by_id(payload, point_id):
 # --- geography -------------------------------------------------------------
 
 def test_every_point_lands_inside_metropolitan_france():
-    for point in _points(FIXTURE):
+    for point in _points(PAYLOAD):
         assert LON_MIN <= point["lon"] <= LON_MAX, point
         assert LAT_MIN <= point["lat"] <= LAT_MAX, point
 
@@ -30,42 +44,42 @@ def test_every_point_lands_inside_metropolitan_france():
 def test_a_lambert93_geometry_is_dropped_rather_than_plotted():
     # SDIS 64 publishes Lambert-93 x/y beside WGS84 lon/lat. A six-digit
     # easting read as a longitude puts the point in the Gulf of Guinea.
-    ids = [p["id"] for p in _points(FIXTURE)]
+    ids = [p["id"] for p in _points(PAYLOAD)]
     assert "644170100" not in ids
 
 
 def test_the_lambert93_columns_are_never_read_as_coordinates():
-    point = _by_id(FIXTURE, "644170027")
+    point = _by_id(PAYLOAD, "644170027")
     assert point["lon"] == pytest.approx(-0.26622, abs=1e-4)
     assert point["lat"] == pytest.approx(43.17211, abs=1e-4)
 
 
 def test_a_point_with_no_usable_geometry_is_skipped():
-    ids = [p["id"] for p in _points(FIXTURE)]
+    ids = [p["id"] for p in _points(PAYLOAD)]
     assert "644170099" not in ids       # geometry: null
     assert "35055-9999" not in ids      # MultiPoint with no coordinates
     assert "300-005" not in ids         # empty COORDINATES column
 
 
 def test_a_multipoint_geometry_is_read_from_its_first_point():
-    point = _by_id(FIXTURE, "35055-0034")
+    point = _by_id(PAYLOAD, "35055-0034")
     assert point["lon"] == pytest.approx(-1.60872, abs=1e-4)
     assert point["lat"] == pytest.approx(48.08876, abs=1e-4)
 
 
 def test_a_source_that_swaps_lat_and_lon_still_lands_in_france():
     # Sixt-sur-Aff publishes LAT_PEI=-2.00927 and LONG_PEI=47.75654.
-    point = _by_id(FIXTURE, "328-0001")
+    point = _by_id(PAYLOAD, "328-0001")
     assert point["lon"] == pytest.approx(-2.00927, abs=1e-4)
     assert point["lat"] == pytest.approx(47.75654, abs=1e-4)
 
 
 def test_decimal_commas_are_read_as_decimal_points():
-    assert _by_id(FIXTURE, "328-0004")["lat"] == pytest.approx(47.76102, abs=1e-4)
+    assert _by_id(PAYLOAD, "328-0004")["lat"] == pytest.approx(47.76102, abs=1e-4)
 
 
 def test_a_latitude_longitude_pair_packed_in_one_column_is_split():
-    point = _by_id(FIXTURE, "300-002")
+    point = _by_id(PAYLOAD, "300-002")
     assert point["lat"] == pytest.approx(46.168854, abs=1e-5)
     assert point["lon"] == pytest.approx(-1.219538, abs=1e-5)
 
@@ -73,30 +87,30 @@ def test_a_latitude_longitude_pair_packed_in_one_column_is_split():
 # --- capacity --------------------------------------------------------------
 
 def test_unknown_capacity_is_none_and_never_zero():
-    for point in _points(FIXTURE):
+    for point in _points(PAYLOAD):
         assert point["capacity_m3"] is None or point["capacity_m3"] > 0
 
 
 def test_a_missing_capacity_reads_as_unknown():
-    assert _by_id(FIXTURE, "950-0001")["capacity_m3"] is None   # volume_pa null
-    assert _by_id(FIXTURE, "CAS0006")["capacity_m3"] is None    # capacite null
+    assert _by_id(PAYLOAD, "950-0001")["capacity_m3"] is None   # volume_pa null
+    assert _by_id(PAYLOAD, "CAS0006")["capacity_m3"] is None    # capacite null
 
 
 def test_a_zero_capacity_reads_as_unknown_not_as_an_empty_tank():
     # A 0 m3 water point reads as empty; sending a crew to an empty tank is
     # the failure that matters. Publishers use 0 for "not recorded".
-    assert _by_id(FIXTURE, "004-0012")["capacity_m3"] is None
+    assert _by_id(PAYLOAD, "004-0012")["capacity_m3"] is None
 
 
 def test_a_real_capacity_survives():
-    assert _by_id(FIXTURE, "162-0003")["capacity_m3"] == 120.0
-    assert _by_id(FIXTURE, "AVM0046")["capacity_m3"] == 20
+    assert _by_id(PAYLOAD, "162-0003")["capacity_m3"] == 120.0
+    assert _by_id(PAYLOAD, "AVM0046")["capacity_m3"] == 20
 
 
 def test_flow_rate_is_never_mistaken_for_capacity():
     # 92 m3/h out of a poteau is not 92 m3 of stored water.
-    assert _by_id(FIXTURE, "950-0001")["capacity_m3"] is None
-    assert _by_id(FIXTURE, "1364")["capacity_m3"] is None
+    assert _by_id(PAYLOAD, "950-0001")["capacity_m3"] is None
+    assert _by_id(PAYLOAD, "1364")["capacity_m3"] is None
 
 
 # --- the kind vocabulary ---------------------------------------------------
@@ -122,60 +136,60 @@ def test_flow_rate_is_never_mistaken_for_capacity():
     ("73008-0001", "citerne"),  # "BS", bache souple
 ])
 def test_the_real_published_vocabulary_maps_onto_our_kinds(point_id, kind):
-    assert _by_id(FIXTURE, point_id)["kind"] == kind
+    assert _by_id(PAYLOAD, point_id)["kind"] == kind
 
 
 def test_an_unrecognised_kind_is_none_and_never_guessed_as_a_borne():
-    assert _by_id(FIXTURE, "641020011")["kind"] is None   # "Autre"
-    assert _by_id(FIXTURE, "300-004")["kind"] is None     # "Indéterminé"
-    assert _by_id(FIXTURE, "1402")["kind"] is None        # type null
+    assert _by_id(PAYLOAD, "641020011")["kind"] is None   # "Autre"
+    assert _by_id(PAYLOAD, "300-004")["kind"] is None     # "Indéterminé"
+    assert _by_id(PAYLOAD, "1402")["kind"] is None        # type null
 
 
 def test_a_source_with_no_kind_field_at_all_yields_none():
     # Saint-Ave publishes geometry and a diameter, and no type.
-    kinds = {p["kind"] for p in _points(FIXTURE) if p["dep"] == "56"}
+    kinds = {p["kind"] for p in _points(PAYLOAD) if p["dep"] == "56"}
     assert kinds == {None}
 
 
 # --- départements and identity ---------------------------------------------
 
 def test_the_departement_comes_from_the_commune_code_when_there_is_one():
-    assert _by_id(FIXTURE, "644170027")["dep"] == "64"
-    assert _by_id(FIXTURE, "950-0001")["dep"] == "81"
-    assert _by_id(FIXTURE, "35055-0034")["dep"] == "35"
-    assert _by_id(FIXTURE, "1364")["dep"] == "49"
+    assert _by_id(PAYLOAD, "644170027")["dep"] == "64"
+    assert _by_id(PAYLOAD, "950-0001")["dep"] == "81"
+    assert _by_id(PAYLOAD, "35055-0034")["dep"] == "35"
+    assert _by_id(PAYLOAD, "1364")["dep"] == "49"
 
 
 def test_a_commune_outside_its_own_sources_departement_keeps_its_real_one():
     # One Grand Annecy row sits in Savoie, not Haute-Savoie.
-    assert _by_id(FIXTURE, "73008-0001")["dep"] == "73"
+    assert _by_id(PAYLOAD, "73008-0001")["dep"] == "73"
 
 
 def test_an_unusable_commune_code_falls_back_to_the_sources_departement():
-    point = next(p for p in _points(FIXTURE) if p["id"].startswith("annecy-"))
+    point = next(p for p in _points(PAYLOAD) if p["id"].startswith("annecy-"))
     assert point["dep"] == "74"
 
 
 def test_a_point_with_no_identifier_still_gets_a_stable_one():
-    ids = [p["id"] for p in _points(FIXTURE) if p["dep"] == "56"]
+    ids = [p["id"] for p in _points(PAYLOAD) if p["dep"] == "56"]
     assert all(i for i in ids)
     assert len(set(ids)) == len(ids)
-    assert _points(FIXTURE) == _points(FIXTURE)
+    assert _points(PAYLOAD) == _points(PAYLOAD)
 
 
 def test_every_point_is_tagged_as_a_water_point():
-    assert {p["source"] for p in _points(FIXTURE)} == {"pei"}
+    assert {p["source"] for p in _points(PAYLOAD)} == {"pei"}
 
 
 def test_every_point_carries_the_whole_schema():
-    for point in _points(FIXTURE):
+    for point in _points(PAYLOAD):
         assert set(point) == {"id", "lat", "lon", "kind", "capacity_m3", "dep", "source"}
 
 
 # --- the coverage statement ------------------------------------------------
 
 def test_the_layer_states_which_departements_it_actually_knows_about():
-    coverage = water.normalize(FIXTURE)["coverage"]
+    coverage = water.normalize(PAYLOAD)["coverage"]
     assert coverage, "a partial layer that cannot state its limits must not ship"
     for area in coverage:
         assert set(area) == {"dep", "area", "scope", "count"}
@@ -184,11 +198,18 @@ def test_the_layer_states_which_departements_it_actually_knows_about():
 
 
 def test_a_complete_departement_is_not_advertised_as_a_local_patch():
-    coverage = {a["dep"]: a for a in water.normalize(FIXTURE)["coverage"]}
-    assert coverage["64"]["scope"] == "departement"
-    assert coverage["81"]["scope"] == "departement"
-    assert coverage["49"]["scope"] == "local"
-    assert coverage["34"]["scope"] == "local"
+    coverage = {a["area"]: a for a in water.normalize(PAYLOAD)["coverage"]}
+    assert coverage["Pyrénées-Atlantiques"]["scope"] == "departement"
+    assert coverage["Tarn"]["scope"] == "departement"
+    assert coverage["Angers Loire Métropole"]["scope"] == "local"
+
+
+def test_the_two_herault_registers_are_advertised_separately():
+    # The SDIS register and the DFCI forest-water set are different registers,
+    # not duplicates: only 3 of 328 DFCI points sit within 100 m of an SDIS one.
+    herault = [a for a in water.normalize(PAYLOAD)["coverage"] if a["dep"] == "34"]
+    assert {a["scope"] for a in herault} == {"departement", "local"}
+    assert len(herault) == 2
 
 
 def test_a_source_that_yielded_nothing_is_not_claimed_as_covered():
@@ -225,7 +246,10 @@ def test_a_malformed_payload_does_not_raise():
 class _Response:
     def __init__(self, body):
         self.content = body.encode() if isinstance(body, str) else body
-        self.text = self.content.decode()
+
+    @property
+    def text(self):
+        return self.content.decode("utf-8", "replace")
 
     def raise_for_status(self):
         pass
@@ -271,9 +295,9 @@ def test_fetch_bounds_every_source_with_an_explicit_byte_cap():
 
 
 def test_normalize_bounds_every_source_with_an_explicit_point_cap():
-    points = _points_capped = water.normalize(FIXTURE, cap=1)["points"]
-    assert len(points) == len([s for s in water.SOURCES if s["key"] in FIXTURE])
-    assert len(_points_capped) < len(_points(FIXTURE))
+    points = _points_capped = water.normalize(PAYLOAD, cap=1)["points"]
+    assert len(points) == len([s for s in water.SOURCES if s["key"] in PAYLOAD])
+    assert len(_points_capped) < len(_points(PAYLOAD))
 
 
 def test_fetch_ignores_a_body_it_cannot_parse():
@@ -284,10 +308,95 @@ def test_fetch_ignores_a_body_it_cannot_parse():
 # --- the source table itself -----------------------------------------------
 
 def test_every_source_is_stdlib_parseable():
-    assert {s["format"] for s in water.SOURCES} == {"geojson", "csv"}
+    # gpkg belongs here: a GeoPackage is a SQLite database, and sqlite3 is stdlib.
+    assert {s["format"] for s in water.SOURCES} == {"geojson", "csv", "gpkg"}
 
 
 def test_every_source_declares_where_it_applies():
     for source in water.SOURCES:
         assert source["scope"] in ("departement", "local")
         assert len(source["dep"]) == 2 and source["area"]
+
+
+# --- GeoPackage and the inverse Lambert-93 ---------------------------------
+
+def test_the_inverse_lambert93_matches_a_known_point():
+    lon, lat = water.lambert93_to_wgs84(*AGDE_L93)
+    assert (round(lon, 5), round(lat, 5)) == AGDE_WGS84
+
+
+def test_the_inverse_lambert93_round_trips_the_projection_origin():
+    # False easting/northing sit exactly on lon 3, lat 46.5 by definition.
+    lon, lat = water.lambert93_to_wgs84(700000.0, 6600000.0)
+    assert lon == pytest.approx(3.0, abs=1e-9)
+    assert lat == pytest.approx(46.5, abs=1e-9)
+
+
+def test_a_geopackage_layer_is_read_and_reprojected():
+    points = _points({"herault_sdis": GPKG["herault_sdis"]})
+    assert len(points) == 5
+    agde = next(p for p in points if p["id"] == "34001.00001")
+    assert (agde["lon"], agde["lat"]) == AGDE_WGS84
+
+
+def test_every_reprojected_geopackage_point_lands_inside_france():
+    for point in _points({"herault_sdis": GPKG["herault_sdis"]}):
+        assert LON_MIN <= point["lon"] <= LON_MAX, point
+        assert LAT_MIN <= point["lat"] <= LAT_MAX, point
+
+
+def test_raw_lambert93_metres_never_reach_the_output():
+    # 723894 as a longitude is the whole point of this layer's CRS handling.
+    for point in _points({"herault_sdis": GPKG["herault_sdis"]}):
+        assert abs(point["lon"]) < 180 and abs(point["lat"]) < 90
+
+
+def test_a_geopackage_row_with_no_geometry_is_skipped():
+    ids = [p["id"] for p in _points({"herault_sdis": GPKG["herault_sdis"]})]
+    assert "34001.09999" not in ids
+
+
+def test_a_geopackage_already_in_wgs84_is_not_reprojected():
+    point, = _points({"herault_sdis": GPKG["wgs84"]})
+    assert (point["lon"], point["lat"]) == AGDE_WGS84
+
+
+def test_a_geopackage_in_an_unhandled_projection_is_skipped_not_guessed():
+    with pytest.warns(UserWarning, match="3857"):
+        assert _points({"herault_sdis": GPKG["webmercator"]}) == []
+
+
+def test_an_unhandled_projection_is_not_claimed_as_covered():
+    with pytest.warns(UserWarning):
+        assert water.normalize({"herault_sdis": GPKG["webmercator"]})["coverage"] == []
+
+
+def test_the_geopackage_vocabulary_maps_onto_our_kinds():
+    kinds = {p["id"]: p["kind"] for p in _points({"herault_sdis": GPKG["herault_sdis"]})}
+    assert kinds["34001.00001"] == "borne"    # PI
+    assert kinds["34001.00002"] == "borne"    # BI
+    assert kinds["34003.00011"] == "citerne"  # CI
+    assert kinds["34129.00004"] == "naturel"  # PA
+    assert kinds["34129.00009"] is None       # BA, not a documented abbreviation
+
+
+def test_the_geopackage_style_table_is_not_read_as_a_feature_layer():
+    # gpkg_contents also lists layer_styles, whose data_type is "attributes".
+    assert len(_points({"herault_sdis": GPKG["herault_sdis"]})) == 5
+
+
+def test_a_body_that_is_not_a_geopackage_yields_nothing():
+    for body in (b"", b"<html>502</html>", "not bytes", None):
+        assert _points({"herault_sdis": body}) == []
+
+
+def test_the_full_herault_register_counts_as_a_whole_departement():
+    coverage, = water.normalize({"herault_sdis": GPKG["herault_sdis"]})["coverage"]
+    assert coverage["scope"] == "departement"
+    assert coverage["dep"] == "34"
+    assert coverage["count"] == 5
+
+
+def test_fetch_keeps_a_geopackage_as_bytes_rather_than_decoding_it():
+    session = _Session(bodies={"peis-herault-l93.gpkg": GPKG["herault_sdis"]})
+    assert water.fetch(session)["herault_sdis"] == GPKG["herault_sdis"]

@@ -4,9 +4,9 @@ This is the one layer aimed at firefighters rather than residents, and it is the
 most fragmented data in the app. DECI is a mayoral competence under a règlement
 départemental, so each SDIS owns its own register by law: there is no national
 authority and therefore no national dataset to wait for. A survey of data.gouv on
-2026-07-29 found 21 candidate datasets, of which nine are stdlib-parseable and
-reachable — 34,643 points, two complete départements, seven local patches. That
-is roughly 4% of France's estimated ~800,000 PEI.
+2026-07-29 found 21 candidate datasets, of which ten are stdlib-parseable and
+reachable — 53,937 points, three complete départements, seven local patches. That
+is roughly 7% of France's estimated ~800,000 PEI.
 
 A firefighter who sees no water point must not conclude there is none, so
 normalize() returns a coverage statement alongside the points and the frontend is
@@ -15,19 +15,26 @@ expected to render it. A source that yields nothing is never claimed as covered.
 Two traps this module exists to survive:
 
   * **Lambert-93.** SDIS 64 and Grand Annecy publish `x`/`y` in EPSG:2154 beside
-    WGS84 `lon`/`lat`. A six-digit easting read as a longitude lands in the Gulf
-    of Guinea — the French twin of the EPSG:3978 trap the Canadian hotspots hit.
-    Fields are read by name, never positionally, and every point is checked
-    against the France box afterwards.
+    WGS84 `lon`/`lat`, and the Hérault GeoPackage is *entirely* in EPSG:2154. A
+    six-digit easting read as a longitude lands in the Gulf of Guinea — the
+    French twin of the EPSG:3978 trap the Canadian hotspots hit. Fields are read
+    by name, never positionally; the GeoPackage is reprojected from the srs_id
+    its own metadata declares; and every point is checked against the France box
+    afterwards.
   * **Capacity that is not capacity.** Most sources publish flow rate (m³/h) and
     pipe diameter, not stored volume. Only Tarn and the Hérault DFCI set carry a
-    real m³ figure, and only on ~4% of points overall. Flow is never converted:
+    real m³ figure, and only on ~2% of points overall. Flow is never converted:
     an unknown capacity is None, and a published 0 is also None, because sending
     a crew to a tank the map called empty is the failure that matters here.
 """
 import csv
 import io
 import json
+import math
+import sqlite3
+import struct
+import tempfile
+import warnings
 
 from build.http import TIMEOUT_SECONDS
 
@@ -77,6 +84,17 @@ SOURCES = (
      "url": "https://opendata.agglo-larochelle.fr/sites/default/files/dataset/res"
             "/eau_deau_potable_poteau_dincendie/reseau_deau_potable_poteau_dincendie.csv"},
 
+    # A GeoPackage is a SQLite database, so this needs no dependency beyond
+    # stdlib. It is published in Lambert-93 — see _gpkg_rows.
+    {"key": "herault_sdis", "dep": "34", "area": "Hérault — registre SDIS 34",
+     "scope": "departement", "format": "gpkg", "id": "id_sdis", "kind": "type_pei",
+     "insee": "insee",
+     "url": "https://static.data.gouv.fr/resources/points-deau-incendie-du-departement-"
+            "de-lherault-sdis-34/20240223-133940/peis-herault-l93.gpkg"},
+
+    # Forest-fire defence water, managed by the département rather than the SDIS.
+    # A separate register, not a subset: only 3 of its 328 points sit within
+    # 100 m of an SDIS one, so the two are kept side by side.
     {"key": "herault_dfci", "dep": "34", "area": "Hérault — points d'eau DFCI (forêt)",
      "scope": "local", "format": "geojson", "id": "n_eau_1", "kind": "nature",
      "capacity": "capacite",
@@ -103,10 +121,6 @@ SOURCES = (
 # 4a99-45f4-b91b-e3eab62892f1.csv). Both resolve in DNS and refuse connections;
 # neither is wired in, because their field names cannot be read from a dead host
 # and guessing them would invent coordinates. Add them once one answers.
-#
-# Hérault SDIS 34 is the full register for a Mediterranean fire département and
-# would be the single most valuable addition, but it ships gpkg only. That needs
-# a dependency, which is the owner's call, not this module's.
 
 # Publishers write "NULL" as a string surprisingly often.
 BLANK = {"", "null", "none", "nan", "-"}
@@ -145,6 +159,11 @@ def fetch(session, max_bytes=MAX_BYTES, timeout=TIMEOUT_SECONDS):
             response.raise_for_status()
             if len(response.content) > max_bytes:
                 continue
+            if source["format"] == "gpkg":
+                # A SQLite file; decoding it as text would destroy it.
+                if response.content:
+                    payload[source["key"]] = response.content
+                continue
             body = response.content.decode("utf-8-sig", errors="replace").strip()
             if not body:
                 continue
@@ -154,6 +173,109 @@ def fetch(session, max_bytes=MAX_BYTES, timeout=TIMEOUT_SECONDS):
         except Exception:  # noqa: BLE001 - one bad source must not sink the layer
             continue
     return payload
+
+
+# --- EPSG:2154, Lambert-93 -------------------------------------------------
+# A Lambert conformal conic (2SP) on GRS80. The inverse is Snyder's, and it is
+# plain arithmetic: no projection library is needed to undo it. Verified against
+# Agde, Hérault — 723894.42, 6262032.84 gives 3.29510, 43.45699.
+_A = 6378137.0                                  # GRS80 semi-major axis, metres
+_E = math.sqrt(2 / 298.257222101 - (1 / 298.257222101) ** 2)
+_LAT_0, _LON_0 = math.radians(46.5), math.radians(3.0)
+_LAT_1, _LAT_2 = math.radians(44.0), math.radians(49.0)
+_FALSE_EASTING, _FALSE_NORTHING = 700000.0, 6600000.0
+
+
+def _conic_m(lat):
+    return math.cos(lat) / math.sqrt(1 - _E * _E * math.sin(lat) ** 2)
+
+
+def _conic_t(lat):
+    ratio = _E * math.sin(lat)
+    return math.tan(math.pi / 4 - lat / 2) / ((1 - ratio) / (1 + ratio)) ** (_E / 2)
+
+
+_N = ((math.log(_conic_m(_LAT_1)) - math.log(_conic_m(_LAT_2)))
+      / (math.log(_conic_t(_LAT_1)) - math.log(_conic_t(_LAT_2))))
+_F = _conic_m(_LAT_1) / (_N * _conic_t(_LAT_1) ** _N)
+_RHO_0 = _A * _F * _conic_t(_LAT_0) ** _N
+
+EPSG_WGS84 = 4326
+EPSG_LAMBERT93 = 2154
+
+
+def lambert93_to_wgs84(x, y):
+    """Metres east/north in EPSG:2154 to (lon, lat) degrees."""
+    dx, dy = x - _FALSE_EASTING, _RHO_0 - (y - _FALSE_NORTHING)
+    rho = math.copysign(math.hypot(dx, dy), _N)
+    t = (rho / (_A * _F)) ** (1 / _N)
+    lon = math.atan2(dx, dy) / _N + _LON_0
+    lat = math.pi / 2 - 2 * math.atan(t)
+    for _ in range(12):  # converges to well under a millimetre in five
+        ratio = _E * math.sin(lat)
+        lat = math.pi / 2 - 2 * math.atan(t * ((1 - ratio) / (1 + ratio)) ** (_E / 2))
+    return math.degrees(lon), math.degrees(lat)
+
+
+def _wkb_point(blob):
+    """(x, y) out of a GeoPackage geometry blob: a GP header, then standard WKB."""
+    if not isinstance(blob, (bytes, bytearray)) or len(blob) < 8 or blob[:2] != b"GP":
+        return None
+    flags = blob[3]
+    if (flags >> 4) & 1:                        # the "empty geometry" bit
+        return None
+    offset = 8 + (0, 4, 6, 6, 8)[(flags >> 1) & 7] * 8      # skip the envelope
+    if len(blob) < offset + 21:
+        return None
+    order = "<" if blob[offset] else ">"
+    if struct.unpack_from(order + "I", blob, offset + 1)[0] & 0xFFFF != 1:
+        return None                             # not a Point; nothing else here
+    return struct.unpack_from(order + "dd", blob, offset + 5)
+
+
+def _gpkg_rows(body):
+    """Read every feature layer of a GeoPackage into (record, (lon, lat)) pairs.
+
+    The projection comes from gpkg_contents rather than being assumed: the
+    Hérault file is Lambert-93 today and a republication in another CRS must not
+    silently become six-digit longitudes. Anything we cannot undo exactly is
+    skipped with a message, because a guessed projection is a wrong location.
+    """
+    if not isinstance(body, (bytes, bytearray)) or not body.startswith(b"SQLite format 3\x00"):
+        return []
+    rows = []
+    with tempfile.NamedTemporaryFile(suffix=".gpkg") as handle:
+        handle.write(body)
+        handle.flush()
+        db = sqlite3.connect(handle.name)
+        try:
+            db.row_factory = sqlite3.Row
+            layers = db.execute(
+                "SELECT c.table_name AS name, c.srs_id AS srs, g.column_name AS geom "
+                "FROM gpkg_contents c JOIN gpkg_geometry_columns g "
+                "ON g.table_name = c.table_name WHERE c.data_type = 'features'"
+            ).fetchall()
+            for layer in layers:
+                if layer["srs"] not in (EPSG_WGS84, EPSG_LAMBERT93):
+                    warnings.warn(
+                        f"{layer['name']}: srs_id {layer['srs']} is neither WGS84 "
+                        f"({EPSG_WGS84}) nor Lambert-93 ({EPSG_LAMBERT93}); layer "
+                        "skipped rather than guessing its projection")
+                    continue
+                quoted = layer["name"].replace('"', '""')
+                for record in db.execute(f'SELECT * FROM "{quoted}"'):
+                    point = _wkb_point(record[layer["geom"]])
+                    if point is not None and layer["srs"] == EPSG_LAMBERT93:
+                        point = lambert93_to_wgs84(*point)
+                    rows.append((
+                        {key: record[key] for key in record.keys() if key != layer["geom"]},
+                        point,
+                    ))
+        except sqlite3.DatabaseError:
+            return rows
+        finally:
+            db.close()
+    return rows
 
 
 def _text(value):
@@ -217,19 +339,18 @@ def _coordinates(geometry):
     return None if lon is None or lat is None else (lon, lat)
 
 
-def _rows(source, body):
-    """Yield (properties, coordinates-or-None) pairs, whatever the format."""
-    if source["format"] == "geojson":
-        features = (body or {}).get("features") if isinstance(body, dict) else None
-        for feature in features if isinstance(features, list) else ():
-            if not isinstance(feature, dict):
-                continue
-            properties = feature.get("properties")
-            yield (properties if isinstance(properties, dict) else {},
-                   _coordinates(feature.get("geometry")))
-        return
+def _geojson_rows(body):
+    features = (body or {}).get("features") if isinstance(body, dict) else None
+    for feature in features if isinstance(features, list) else ():
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties")
+        yield (properties if isinstance(properties, dict) else {},
+               _coordinates(feature.get("geometry")))
 
-    reader = csv.DictReader(io.StringIO(body or ""),
+
+def _csv_rows(source, body):
+    reader = csv.DictReader(io.StringIO(body if isinstance(body, str) else ""),
                             delimiter=source.get("delimiter", ","))
     for row in reader:
         if source.get("latlon"):
@@ -240,6 +361,19 @@ def _rows(source, body):
         else:
             pair = (_number(row.get(source["lon"])), _number(row.get(source["lat"])))
         yield row, None if pair[0] is None or pair[1] is None else pair
+
+
+def _rows(source, body):
+    """(properties, coordinates-or-None) pairs, whatever the format.
+
+    A dispatcher rather than a generator: _gpkg_rows returns a list, and a bare
+    `return` inside a generator would quietly yield nothing at all.
+    """
+    if source["format"] == "gpkg":
+        return _gpkg_rows(body)
+    if source["format"] == "geojson":
+        return _geojson_rows(body)
+    return _csv_rows(source, body)
 
 
 def normalize(payload, cap=MAX_POINTS):
