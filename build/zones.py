@@ -49,7 +49,16 @@ def active_zones(config, danger_rows):
                       "reason": "config"})
 
     threshold = int(config.get("auto_danger_min") or DEFAULTS["auto_danger_min"])
-    for row in danger_rows or []:
+
+    # Worst first. The cap truncates, so ordering decides which departements get
+    # detail: taking the bulletin's own order would hand a slot to a level-3
+    # departement while a level-4 one beside it got none.
+    def severity(row):
+        levels = [v for v in (row.get("level_today"), row.get("level_tomorrow"))
+                  if isinstance(v, int)]
+        return max(levels) if levels else 0
+
+    for row in sorted(danger_rows or [], key=severity, reverse=True):
         # Tomorrow counts as well as today: detail has to exist before the fire,
         # not after it.
         levels = [row.get("level_today"), row.get("level_tomorrow")]

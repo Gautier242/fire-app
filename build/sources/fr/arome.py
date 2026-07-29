@@ -45,6 +45,29 @@ def fetch(session, lat, lon, hours=24):
     return response.json()
 
 
+def _index_of_now(times, now):
+    """Index of the first forecast hour at or after `now`.
+
+    Returns 0 when `now` is absent or unparseable -- a readable forecast from the
+    start beats no forecast at all. Returns None when `now` is past the end,
+    because projecting from an expired forecast is worse than projecting nothing.
+    """
+    if not times:
+        return None
+    if not now:
+        return 0
+    stamp = str(now)[:16]
+    for i, value in enumerate(times):
+        if str(value)[:16] >= stamp:
+            return i
+    # Every hour in the forecast is behind us.
+    return None if _looks_like_a_timestamp(stamp) else 0
+
+
+def _looks_like_a_timestamp(value):
+    return len(value) >= 13 and value[4] == "-" and value[7] == "-"
+
+
 def normalize(payload, now=None, hours=MAX_HOURS):
     hourly = (payload or {}).get("hourly") or {}
     times = hourly.get("time")
@@ -62,8 +85,18 @@ def normalize(payload, now=None, hours=MAX_HOURS):
     def at(values, i):
         return values[i] if i < len(values) else None
 
+    # Slice from the current hour, not from the start of the array. The forecast
+    # begins at local midnight, so taking the first N hours would hand the spread
+    # model midnight's wind at six in the evening -- a wrong projection delivered
+    # with full confidence.
+    start = _index_of_now(times, now)
+    if start is None:
+        return []
+    window = times[start:start + max(1, min(int(hours), MAX_HOURS))]
+
     rows = []
-    for i, stamp in enumerate(times[:max(1, min(int(hours), MAX_HOURS))]):
+    for offset, stamp in enumerate(window):
+        i = start + offset
         bearing = at(direction, i)
         rows.append({
             "time": stamp,

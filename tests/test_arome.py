@@ -56,3 +56,45 @@ def test_a_malformed_payload_returns_no_rows_rather_than_raising():
 def test_the_requested_hour_count_is_bounded():
     rows = arome.normalize(PAYLOAD, hours=6)
     assert len(rows) == 6
+
+
+def test_hours_are_taken_from_now_and_not_from_the_start_of_the_array():
+    # The array starts at midnight local. Slicing the first N hours hands the
+    # spread model midnight's wind at six in the evening, which is a wrong
+    # projection presented with full confidence.
+    payload = {"hourly": {
+        "time": [f"2026-07-29T{h:02d}:00" for h in range(24)],
+        "wind_speed_10m": [float(h) for h in range(24)],
+        "wind_gusts_10m": [float(h) * 2 for h in range(24)],
+        "wind_direction_10m": [180] * 24,
+        "temperature_2m": [20.0] * 24,
+        "relative_humidity_2m": [50] * 24,
+    }}
+
+    rows = arome.normalize(payload, now="2026-07-29T18:00", hours=3)
+
+    assert [r["time"] for r in rows] == ["2026-07-29T18:00", "2026-07-29T19:00",
+                                        "2026-07-29T20:00"]
+    assert rows[0]["wind_kmh"] == 18.0
+
+
+def test_an_unparseable_now_falls_back_to_the_start_rather_than_returning_nothing():
+    payload = {"hourly": {
+        "time": ["2026-07-29T00:00", "2026-07-29T01:00"],
+        "wind_speed_10m": [1.0, 2.0], "wind_gusts_10m": [2.0, 4.0],
+        "wind_direction_10m": [180, 180], "temperature_2m": [20.0, 20.0],
+        "relative_humidity_2m": [50, 50],
+    }}
+
+    rows = arome.normalize(payload, now="not-a-timestamp", hours=2)
+    assert len(rows) == 2
+
+
+def test_a_now_past_the_end_of_the_forecast_returns_no_rows():
+    payload = {"hourly": {
+        "time": ["2026-07-29T00:00"], "wind_speed_10m": [1.0],
+        "wind_gusts_10m": [2.0], "wind_direction_10m": [180],
+        "temperature_2m": [20.0], "relative_humidity_2m": [50],
+    }}
+    # Better to project nothing than to project from a forecast that has expired.
+    assert arome.normalize(payload, now="2026-08-05T00:00", hours=3) == []

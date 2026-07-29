@@ -89,3 +89,40 @@ def test_the_number_of_zones_is_capped(tmp_path):
              "lat": 44.0 + n / 100, "lon": 2.0} for n in range(1, 20)]
 
     assert len(active_zones(load_config(path), rows)) == 6
+
+
+def test_the_worst_departements_win_the_remaining_slots(tmp_path):
+    # The cap truncates, so which departements survive it matters. Ordering by
+    # whatever the bulletin happened to return would give detail to a level-3
+    # departement while a level-4 one beside it got none.
+    path = tmp_path / "zones.json"
+    path.write_text(json.dumps({"auto_danger_min": 3, "radius_km": 50,
+                                "max_zones": 2, "always": []}))
+    rows = [
+        {"dep": "01", "name": "Ain", "level_today": 3, "lat": 46.0, "lon": 5.3},
+        {"dep": "83", "name": "Var", "level_today": 4, "lat": 43.4, "lon": 6.2},
+        {"dep": "33", "name": "Gironde", "level_today": 3, "level_tomorrow": 4,
+         "lat": 44.8, "lon": -0.6},
+    ]
+
+    zones = active_zones(load_config(path), rows)
+
+    # Var at 4 today and Gironde at 4 tomorrow both outrank Ain at 3.
+    assert [z["id"] for z in zones] == ["dep-83", "dep-33"]
+
+
+def test_pinned_zones_still_come_first_even_when_a_hotter_departement_exists(tmp_path):
+    # A pinned region is a deliberate choice by the site owner and outranks the
+    # automatic threshold, which is the whole point of pinning it.
+    path = tmp_path / "zones.json"
+    path.write_text(json.dumps({
+        "auto_danger_min": 3, "radius_km": 50, "max_zones": 2,
+        "always": [{"id": "gironde", "label": "Gironde", "lat": 44.8, "lon": -0.6}],
+    }))
+    rows = [{"dep": "83", "name": "Var", "level_today": 4, "lat": 43.4, "lon": 6.2},
+            {"dep": "13", "name": "Bouches-du-Rhône", "level_today": 4,
+             "lat": 43.5, "lon": 5.1}]
+
+    zones = active_zones(load_config(path), rows)
+    assert zones[0]["id"] == "gironde"
+    assert len(zones) == 2

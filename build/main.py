@@ -11,9 +11,9 @@ from pathlib import Path
 from build import registry
 from build.http import make_session
 from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis, cwfis_history, opensky
-from build.sources.fr import atmo, evac, firms, mdf, water, wind
+from build.sources.fr import arome, atmo, evac, firms, mdf, terrain, water, wind
 from build.sources.fr import roads as fr_roads
-from build import flares
+from build import fire_spread, flares, zone_build, zones
 
 # Which summary section each source populates, per country.
 #
@@ -154,6 +154,97 @@ def write_side_file(out, name, fetcher):
     return payload
 
 
+# Terrain is fetched per fire, not once per zone, and the radius is small. A
+# 50 km grid over the Maures reports a 1.13 degree regional gradient where the
+# ground the fire is actually on measures 14.09 degrees -- and Rothermel's slope
+# term goes as tan squared, so the coarse figure understates the slope
+# contribution by more than a hundredfold. Measured, not assumed.
+SLOPE_RADIUS_KM = 2
+SLOPE_STEP = 8
+
+# Each fire costs one IGN request, so only the biggest get their own slope. The
+# rest fall back to the zone median, which is honest: a small detection far from
+# anywhere is not what a projection is for.
+MAX_SLOPE_FETCHES = 4
+
+# Garrigue basse. The most common Mediterranean fire fuel, and the map's centre
+# of gravity is the south.
+# ponytail: one fuel model for every zone. BD Foret would give real fuel per
+# polygon and is the single biggest accuracy gain available to the spread model.
+DEFAULT_FUEL = "FM5"
+
+
+def _median_slope(grid):
+    """Median slope across a grid, or None when nothing resolved.
+
+    Median rather than max: one cliff face must not set the rate for a plain.
+    """
+    if not grid:
+        return None
+    values = sorted(cell["slope_deg"] for row in grid.get("grid", [])
+                    for cell in row if cell.get("slope_deg") is not None)
+    return values[len(values) // 2] if values else None
+
+
+def _build_zones(summary, session, out, wildfires):
+    """Pre-build detail files for today's hot zones.
+
+    Every zone is independent and its failure is contained: the browser can fetch
+    the same data live, so a zone must never take down the summary or the danger
+    level.
+    """
+    zone_dir = Path(out) / "zones"
+    config = zones.load_config(Path("public/static/fr/zones.json"))
+    active = zones.active_zones(config, summary.get("danger", []))
+    fuel = fire_spread.FUEL_MODELS[DEFAULT_FUEL]
+    built = []
+
+    for zone in active:
+        try:
+            wind_rows = arome.normalize(
+                arome.fetch(session, zone["lat"], zone["lon"], hours=12),
+                now=summary["generated_at"], hours=12)
+        except Exception:  # noqa: BLE001 - a zone without wind is still useful
+            wind_rows = []
+
+        near = zone_build.fires_in_zone(zone, wildfires)
+        projections = []
+        zone_slope = None
+
+        for index, fire in enumerate(near):
+            slope = None
+            if index < MAX_SLOPE_FETCHES:
+                try:
+                    grid = terrain.normalize(
+                        terrain.fetch(session, fire["lat"], fire["lon"],
+                                      radius_km=SLOPE_RADIUS_KM, step=SLOPE_STEP),
+                        step=SLOPE_STEP)
+                    slope = _median_slope(grid)
+                    if zone_slope is None:
+                        zone_slope = slope
+                except Exception:  # noqa: BLE001
+                    slope = None
+            if slope is None:
+                slope = zone_slope
+            if slope is None:
+                # No slope beats a wrong slope: the projection is flat-ground
+                # only and says so through its own inputs.
+                slope = 0.0
+            projections.append(fire_spread.project(
+                fire, wind_rows, slope_deg=slope, fuel=fuel, hours=3,
+                fuel_model_name=DEFAULT_FUEL))
+
+        try:
+            zone_build.write_zone(zone_dir, zone, wildfires, wind_rows,
+                                  terrain=None, spread=projections)
+            built.append(zone)
+        except Exception:  # noqa: BLE001 - one bad zone must not lose the others
+            continue
+
+    zone_build.write_zone_index(zone_dir, built)
+    print(f"wrote {len(built)} zone file(s) to {zone_dir}")
+
+
 def apply_france_extras(summary, session, out, previous_flares):
     """Everything that can only happen once the French sections are assembled.
 
@@ -206,6 +297,8 @@ def apply_france_extras(summary, session, out, previous_flares):
                     incident["wind"] = reading
         except Exception:  # noqa: BLE001 - a fire without wind is still a fire
             pass
+
+    _build_zones(summary, session, out, wildfires)
 
     # Aircraft are matched against real wildfires only. An aircraft circling a
     # refinery flare is not fighting a fire.
