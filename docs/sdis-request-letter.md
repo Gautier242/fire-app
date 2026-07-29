@@ -56,9 +56,10 @@ civile et de la gestion des crises collecte chaque année, auprès de l'ensemble
 services d'incendie et de secours, le nombre d'interventions par département — dont une
 rubrique « feux de végétations » — et le publie en données ouvertes. Ma demande porte sur
 la fréquence de publication, non sur la nature de la donnée. Je relève par ailleurs que
-le SDIS de la Vendée publie sur son site une carte de ses interventions des dernières
-vingt-quatre heures, positionnées à la commune, l'adresse exacte demeurant
-confidentielle.
+le SDIS de la Vendée publie chaque jour sur son site l'ensemble de ses interventions de
+la veille, situées au centre de la commune, l'adresse exacte demeurant confidentielle :
+une granularité sensiblement plus fine que celle que je sollicite ici, puisque je ne
+demande ni commune, ni intervention individuelle, mais un simple total départemental.
 
 La diffusion de données opérationnelles soulève des enjeux de sécurité dont j'ai
 pleinement conscience, notamment au regard de l'origine criminelle d'une partie des

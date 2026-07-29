@@ -18,10 +18,12 @@ What is obtainable is a **voluntary** arrangement, and the precedent for one is 
 stronger than the spec assumed. Two corrections to §2 of the spec:
 
 - "No SDIS publishes live interventions" is true **on data.gouv.fr** and false **on
-  SDIS websites**. At least one SDIS — Vendée — publishes a public map of its
-  interventions over the last 24 h at commune granularity, with the exact address
-  deliberately withheld. That is very close to the thing we would ask for, already
-  shipped, by a SDIS, in public.
+  SDIS websites**. At least one SDIS — Vendée — publishes every one of its individual
+  interventions at commune granularity, with the exact address deliberately withheld, as
+  structured JSON embedded in the page (§1.3.1). It is **daily and covers the previous
+  day**, not live, its only fire category is undifferentiated `INC`, and its licence is
+  all-rights-reserved — so it is no use as a *source*. Its value is as **evidence**: a
+  SDIS decided unprompted that this granularity is compatible with operational security.
 - DGSCGC already collects "interventions en cours" indicators from **all 99** SIS and
   publishes them per-département, including a `Feux de végétations` column. Annually.
   So the ask is a **cadence change on an existing collection**, not a new category of
@@ -119,7 +121,7 @@ This is where the spec's blanket claim needs narrowing. Checked live on 2026-07-
 
 | Service | What is published | Status when checked |
 |---|---|---|
-| **SDIS Vendée (85)** | Map of interventions over the last 24 h, five categories (secours à personne, accidents, incendies, risques technologiques/naturels, opérations diverses), positioned to the **commune**, address withheld | Page live, HTTP 200, caveat text present |
+| **SDIS Vendée (85)** | Every individual intervention of **the previous day**, categorised (`SAP` / `AVP` / `INC` / `OD`), positioned to the **commune centroid**, address withheld, as embedded JSON | Live and fully characterised — see §1.3.1 |
 | SDIS 32 (Gers) | Page titled "Interventions en cours" | Page live (HTTP 200) but **no intervention data rendered** in the response; could not establish whether the feature still works |
 | SDIS 37 (Indre-et-Loire) | "Activités opérationnelles en temps réel" | **Host unreachable** from here (connection refused); could not verify |
 | SDIS 18 (Cher) | `carte_intervention.php` | **Host unreachable**; could not verify |
@@ -135,11 +137,89 @@ That single sentence is the negotiated position an SDIS has already reached on i
 **commune yes, address never.** It is worth more to the letter than any statute, because
 it is a SDIS telling another SDIS that this is publishable. The letter quotes it.
 
-Machine-readability is a separate matter and it is poor. Vendée's markers are injected
-client-side over a Google Maps bundle; there is no JSON or GeoJSON endpoint in the page
-source, and the category icon set (`picto_interventions_INC`, `_AVP`, `_SAP`, `_RTN`,
-`_OD`) is the only structured trace. Scraping it would be brittle, single-département,
-and — for a département with low wildfire exposure — worthless to this map. Not pursued.
+### 1.3.1 Is the Vendée feed machine-readable? Yes — fully. But it is not live.
+
+Investigated 2026-07-29. An earlier draft of this document said there was no structured
+endpoint behind the map. That was wrong: the data is HTML-escaped inside an attribute, so
+a grep for coordinates finds nothing. It is clean, structured JSON.
+
+**Where it is.** There is no API. The page carries the whole dataset server-rendered into
+a single attribute:
+
+```
+<div id="markers" data-markers='{"source":"interventions","markers":[[{"label":"date",…}]]}'>
+```
+
+`sdis_map_interactive.js` reads it with `JSON.parse(document.querySelector('#markers')
+.getAttribute('data-markers'))` and plots it. One GET of the page yields the complete
+dataset — no pagination, no ajax, no token.
+
+**Shape.** 123 records when pulled, each an array of `{label, value}` pairs, seven fields,
+no nesting:
+
+| Field | Example | Notes |
+|---|---|---|
+| `date` | `28/07/2026` | **Date only. No time of day.** |
+| `numero` | `26VE039126` | Sequential incident number |
+| `commune` | `SAINT HILAIRE DE VOUST` | Uppercase, unaccented |
+| `code_insee` | `85229` | **Official INSEE code — joins directly to our commune data** |
+| `latitude` / `longitude` | `46.589307465418464` | Commune centroid, see below |
+| `raison_sortie` | `SAP` | Category code |
+
+**Granularity: the commune claim is true, and provable.** Of the 27 communes with more
+than one intervention in the file, **all 27** have exactly one distinct coordinate pair
+shared by every intervention there — La Roche-sur-Yon's 10 interventions sit on one
+identical point. The client-side script even carries a hack to nudge overlapping markers
+apart (`newLng = pos.lng() - 0.0004`), which only exists because collisions are the norm.
+These are centroids, not addresses. The mentions on the page are accurate, not
+aspirational.
+
+**Cadence: daily, and it is D-1, not "the last 24 hours".** All 123 records carry the same
+date — **the previous calendar day**. Two fetches 68 minutes apart returned byte-identical
+record sets. There is no time-of-day field anywhere, so intra-day ordering is not
+recoverable even in principle. This is a nightly batch of yesterday, not a live or rolling
+feed. The response carries `max-age=0` with no `Last-Modified` or `ETag`, so the page is
+rendered per request but the underlying extract is not.
+
+**Coverage is partial and I cannot explain the gap.** The published `numero` values span
+219 consecutive IDs (`…039126` to `…039344`) but only **123** records appear — 44 % of the
+range is absent. Cancelled calls, non-published categories, or IDs consumed elsewhere;
+the data does not say which. Do not treat the count as the département's true intervention
+total.
+
+**Categories are too coarse for this map.** `raison_sortie` in the pull: `SAP` 85 (secours
+à personne), `AVP` 20 (accidents), `INC` **15**, `OD` 3. `INC` is *all* fires — chimney,
+vehicle, dwelling, vegetation, undifferentiated. **There is no vegetation or forest-fire
+category.** So even with the feed in hand, the question this map needs answered — *is a
+feu de forêt being fought here* — is not answerable from it.
+
+**Licence: all rights reserved.** SDIS Vendée is not registered on data.gouv.fr, and the
+site's mentions légales state:
+
+> « Tous les droits de reproduction sont réservés […] Toute reproduction, représentation,
+> adaptation, modification partielle ou intégrale de tout élément composant le site, par
+> quelque moyen que ce soit, est interdite sous peine de poursuite judiciaire. »
+> — [sdis-vendee.com/mentions-legales](https://sdis-vendee.com/mentions-legales/)
+
+Reproduction requires express authorisation from the directeur de publication. `robots.txt`
+is fully permissive (`Disallow:` empty), but that governs crawling, not copyright, and is
+not permission. There is a serious argument that the *informations publiques* inside a
+document produced by an administration are reusable under CRPA L321-1 regardless of
+boilerplate — facts are not authored, and a public-sector factual database sits in the
+réutilisation regime. That is an argument, not a licence. **Consuming this without asking
+would be taking a position on French public-information law in order to obtain a
+low-wildfire département's daily fire count. Not worth it.** If it is ever wanted, ask;
+the address is on the same page as the prohibition.
+
+**What this is and is not worth.** It is *not* a usable source for this map: wrong
+département for wildfire, D-1 instead of live, no vegetation category, and reuse
+prohibited. Its entire value is **evidentiary** — it proves a SDIS decided, on its own,
+that publishing individual interventions with INSEE codes and commune centroids is
+compatible with operational security, and has kept doing so. That is the argument to put
+in front of SDIS 34. But it must be cited for what it is: a **daily** publication of the
+**previous day**, not a live feed. Citing it as live would misdescribe a peer's practice
+to a body that can check in thirty seconds, and would cost more credibility than the point
+is worth.
 
 **Did anyone stop, and why?** Could not establish. I found no reporting of a SDIS
 withdrawing a public intervention feed and no stated reason for one. The SDIS 32 page
@@ -401,7 +481,9 @@ Institutions:
 [annuaire SDIS](https://lannuaire.service-public.gouv.fr/navigation/sdis)
 
 SDIS publications:
-[SDIS Vendée, activité opérationnelle 24 h](https://sdis-vendee.com/nos-missions/lactivite-operationnelle-des-dernieres-24h/) ·
+[SDIS Vendée, activité opérationnelle](https://sdis-vendee.com/nos-missions/lactivite-operationnelle-des-dernieres-24h/)
+(data pulled and parsed 2026-07-29, §1.3.1) ·
+[SDIS Vendée, mentions légales](https://sdis-vendee.com/mentions-legales/) ·
 [SDIS 32, interventions en cours](https://www.sdis32.fr/interventions-en-cours/)
 
 ## Unverified items
@@ -409,3 +491,14 @@ SDIS publications:
 Nothing in this document is a placeholder. The letter contains one `[à vérifier]`: the
 name of the PRADA at SDIS 34, which I deliberately did not attempt to source. Address it
 by function.
+
+Open questions I could not close:
+
+- Why 44 % of the Vendée `numero` range is unpublished (§1.3.1). Cancelled calls,
+  withheld categories, or shared numbering — the data does not distinguish them.
+- Whether the Vendée extract runs on a fixed nightly schedule or irregularly. Two fetches
+  68 minutes apart is enough to prove it does not update intra-day, not enough to
+  establish when it does.
+- Whether the all-rights-reserved notice on the Vendée site would actually survive against
+  a reuse claim under the CRPA L321-1 réutilisation regime. Untested, and not worth testing
+  for this dataset.
