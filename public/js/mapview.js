@@ -62,9 +62,17 @@ function basemaps() {
   };
 }
 
-export function createMap(elementId) {
+export const FRANCE_CENTRE = [46.6, 2.5];
+export const FRANCE_ZOOM = 6;
+
+// Météo des forêts colours, from the official scale. Kept out of the heat ramp
+// on purpose: this is a forecast about conditions, not a detected fire, and the
+// two must not look alike.
+const DANGER_FILL = { 1: '#3FB98A', 2: '#E8C33D', 3: '#E8802D', 4: '#D2222D' };
+
+export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOOM } = {}) {
   const map = L.map(elementId, {
-    center: CANADA_CENTRE, zoom: CANADA_ZOOM,
+    center, zoom,
     // Default control positions collide with our own chrome: zoom lands on top
     // of the layer chips, and the scale bar lands on the detail dial.
     zoomControl: false, attributionControl: true,
@@ -93,6 +101,7 @@ export function createMap(elementId) {
     aqhi: L.layerGroup(),
     history: L.layerGroup(),
     aircraft: L.layerGroup(),
+    danger: L.layerGroup(),
     satellite: gibs,
   };
 
@@ -240,6 +249,51 @@ export function createMap(elementId) {
             ? "Aéronef volant bas près d'un feu. Son rôle n'est pas confirmé."
             : 'Flying low near a fire. What it is doing is not confirmed.'}</i>`);
         marker.addTo(layers.aircraft);
+      }
+    },
+
+    // France: the danger forecast as a choropleth, plus ATMO air quality.
+    // A département with no bulletin is drawn hollow rather than green — the
+    // absence of a forecast must not look like the safest forecast.
+    drawFrance(summary, departements, labels) {
+      layers.danger.clearLayers();
+      layers.aqhi.clearLayers();
+
+      const byDep = new Map((summary.danger || []).map((d) => [d.dep, d]));
+      if (departements) {
+        L.geoJSON(departements, {
+          style: (feature) => {
+            const row = byDep.get(feature.properties.code);
+            const level = row && row.level_today;
+            return level
+              ? { color: DANGER_FILL[level], weight: 1, opacity: 0.9,
+                  fillColor: DANGER_FILL[level], fillOpacity: 0.42 }
+              : { color: '#90A5B2', weight: 1, opacity: 0.5,
+                  fillOpacity: 0, dashArray: '4 4' };
+          },
+          onEachFeature: (feature, layer) => {
+            const row = byDep.get(feature.properties.code);
+            const name = feature.properties.nom;
+            layer.bindPopup(row
+              ? `<b>${name}</b><br>${labels.today}: ${row.level_today}/4 — ${labels.level[row.level_today]}`
+                + (row.level_tomorrow ? `<br>${labels.tomorrow}: ${row.level_tomorrow}/4` : '')
+              : `<b>${name}</b><br>${labels.unavailable}`);
+          },
+        }).addTo(layers.danger);
+      }
+
+      for (const station of summary.air_quality || []) {
+        if (!Number.isInteger(station.value)) continue;
+        // ATMO runs 1-6, not the Canadian 1-10+, so it gets its own banding.
+        const band = station.value >= 5 ? 'b3' : station.value >= 4 ? 'b2'
+          : station.value >= 3 ? 'b1' : 'b0';
+        L.marker([station.lat, station.lon], {
+          icon: L.divIcon({
+            className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+            html: `<div class="aqhi-pill ${band}">${station.value}</div>`,
+          }),
+        }).bindPopup(`<b>${(station.name && (station.name.fr || station.name.en)) || station.id}</b>`
+          + `<br>${labels.air}: ${station.value}/6`).addTo(layers.aqhi);
       }
     },
 

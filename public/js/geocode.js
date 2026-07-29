@@ -58,5 +58,9 @@ function toResult(feature) {
     lon,
     postcode: props.postcode ?? '',
     city: props.city ?? '',
+    // The INSEE code, not the postcode, is what identifies a département.
+    // Corsica's 20xxx postcodes map to 2A and 2B, and overseas codes are three
+    // digits — deriving a département from a postcode gets both wrong.
+    citycode: props.citycode ?? '',
   };
 }

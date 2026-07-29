@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feux près de moi — France</title>
+  <meta name="description" content="Le niveau de danger feux de forêt près de chez vous, aujourd'hui et demain, et ce qu'il implique.">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="../css/app.css">
+</head>
+<body>
+  <div class="shell" id="shell" data-mode="simple">
+
+    <aside class="rail" id="rail">
+      <div class="rail-head">
+        <div class="brand">Feux<span>·</span>Près<span>·</span>De<span>·</span>Moi</div>
+        <button class="btn-ghost" id="lang">English</button>
+      </div>
+
+      <button class="locate" id="locate">Vérifier près de chez moi</button>
+
+      <div class="place" id="place" hidden>
+        <b id="place-name"></b>
+        <button id="change-place">Changer</button>
+      </div>
+
+      <div class="picker" id="picker">
+        <label for="place-search" id="picker-label">Ou cherchez une adresse</label>
+        <input type="search" id="place-search" autocomplete="off" spellcheck="false"
+               placeholder="Adresse, ville ou village">
+        <ul id="place-results"></ul>
+      </div>
+
+      <div class="answer" id="answer" hidden aria-live="polite">
+        <span class="tag" id="tag"><i></i><span id="tag-text"></span></span>
+        <h2 id="headline"></h2>
+        <p id="subline"></p>
+      </div>
+
+      <dl class="facts" id="facts" hidden></dl>
+
+      <!-- Unconditional. France broadcasts evacuation orders by FR-Alert
+           straight to phones, so this map cannot see them and must never let
+           its silence read as "no order exists". -->
+      <div class="official" id="alert-box">
+        <p id="alert-text"></p>
+        <a id="alert-link" href="https://www.interieur.gouv.fr/Alerte/FR-Alert" rel="noopener"></a>
+      </div>
+
+      <div class="rail-foot">
+        <span class="live" id="freshness"><i></i><span id="freshness-text">Chargement…</span></span>
+        <a href="../" id="ca-link">Canada</a>
+      </div>
+    </aside>
+
+    <div class="map">
+      <div id="map"></div>
+
+      <div class="toolbar" id="toolbar">
+        <button class="chip" data-layer="danger" aria-pressed="true">
+          <i class="sw hist"></i><span>Danger par département</span>
+        </button>
+        <button class="chip" data-layer="aqhi" aria-pressed="false">
+          <i class="sw aqhi"></i><span>Qualité de l'air</span>
+        </button>
+        <button class="chip" data-layer="satellite" aria-pressed="false" data-adv>
+          <i class="sw sat"></i><span>Image satellite</span>
+        </button>
+
+        <div class="seg basemap" id="basemap" role="group" aria-label="Fond de carte">
+          <button data-base="plain" aria-pressed="true">Carte</button>
+          <button data-base="imagery" aria-pressed="false">Satellite</button>
+        </div>
+      </div>
+
+      <div class="detail-dial" id="dial">
+        <span class="label">Détail</span>
+        <div class="seg" id="modes" role="group" aria-label="Niveau de détail">
+          <button data-mode="minimal" aria-pressed="false">Minimal</button>
+          <button data-mode="simple" aria-pressed="true">Simple</button>
+          <button data-mode="advanced" aria-pressed="false">Avancé</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="../js/app-fr.js"></script>
+</body>
+</html>

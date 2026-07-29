@@ -63,7 +63,7 @@ test('a missing or non-string query returns [] without a network call', async ()
   assert.equal(calls.length, 0);
 });
 
-test('a normal result maps to label, lat, lon, postcode and city', async () => {
+test('a normal result maps to label, lat, lon, postcode, city and citycode', async () => {
   stubFetch(ok(MARSEILLE));
   const results = await searchAddress('12 rue de la République, Marseille');
 
@@ -74,6 +74,9 @@ test('a normal result maps to label, lat, lon, postcode and city', async () => {
     lon: 5.37367,
     postcode: '13001',
     city: 'Marseille',
+    // The INSEE code identifies the departement; the postcode does not, because
+    // Corsica's 20xxx maps to 2A/2B and overseas codes are three digits.
+    citycode: '13201',
   });
 });
 
