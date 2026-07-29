@@ -50,7 +50,18 @@ jobs:
         env:
           OPENSKY_CLIENT_ID: ${{ secrets.OPENSKY_CLIENT_ID }}
           OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
-        run: python -m build.main --out public/data
+        run: python -m build.main --out public/data --country ca
+
+      # France is built separately so its failure cannot take Canada down. The
+      # Canadian site is live and answers an evacuation question; a French
+      # source outage must not block it.
+      - name: Build France data
+        timeout-minutes: 10
+        continue-on-error: true
+        env:
+          OPENSKY_CLIENT_ID: ${{ secrets.OPENSKY_CLIENT_ID }}
+          OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
+        run: python -m build.main --out public/fr/data --country fr
 
       # A stale section with an honest timestamp is publishable. A section that
       # is empty *because its fetch failed* is not - deploying that would show
@@ -58,21 +69,33 @@ jobs:
       - name: Refuse to publish missing sections
         run: |
           python - <<'EOF'
-          import json, sys
-          from build.main import SECTIONS
+          import json, os, sys
+          from build.main import sections_for
 
-          summary = json.load(open("public/data/summary.json"))
-          failed = {s["id"] for s in summary["sources"] if not s["ok"]}
-          blocked = [section for section in ("fires", "evacuations")
-                     if not summary[section]
-                     and any(SECTIONS[i] == section for i in failed)]
+          # Sections whose emptiness would misinform rather than merely omit.
+          CRITICAL = {"ca": ("fires", "evacuations"), "fr": ("danger",)}
+          problems = []
 
-          print(f"fires={len(summary['fires'])} "
-                f"evacuations={len(summary['evacuations'])} "
-                f"aqhi={len(summary['aqhi'])}")
-          print("stale sources:", ", ".join(sorted(failed)) or "none")
-          if blocked:
-              sys.exit(f"refusing to publish: {', '.join(blocked)} empty after fetch failure")
+          for country, path in (("ca", "public/data/summary.json"),
+                                ("fr", "public/fr/data/summary.json")):
+              if not os.path.exists(path):
+                  if country == "ca":
+                      sys.exit("refusing to publish: the Canadian summary is missing")
+                  print(f"{country}: no summary written; the previous deploy keeps serving")
+                  continue
+              summary = json.load(open(path))
+              owners = sections_for(country)
+              failed = {s["id"] for s in summary["sources"] if not s["ok"]}
+              counts = {k: len(v) for k, v in summary.items()
+                        if isinstance(v, list) and k != "sources"}
+              print(f"{country}: {counts}")
+              print(f"{country}: stale sources:", ", ".join(sorted(failed)) or "none")
+              for section in CRITICAL[country]:
+                  if not summary.get(section) and any(owners[i] == section for i in failed):
+                      problems.append(f"{country}/{section}")
+
+          if problems:
+              sys.exit(f"refusing to publish: {', '.join(problems)} empty after fetch failure")
           EOF
 
       - name: Check size budget
