@@ -501,3 +501,78 @@ def test_every_point_is_counted_in_exactly_one_coverage_row():
     layer = water.normalize(PAYLOAD)
 
     assert sum(row["count"] for row in layer["coverage"]) == len(layer["points"])
+
+
+# --- Calvados, SDIS 14 ------------------------------------------------------
+# A GeoJSON published in Lambert-93, which is legal and which nothing else here
+# does: every other GeoJSON source is WGS84. Its CRS is declared in the file.
+CALVADOS = {"calvados": FIXTURE["calvados"]}
+
+
+def test_a_geojson_declaring_lambert93_is_reprojected_not_read_as_degrees():
+    """Reading 426012, 6911080 as degrees is nowhere; dropping it is a lost département.
+
+    The France box in normalize() would reject the raw metres, so the failure
+    mode without this is a register that fetches perfectly and yields zero
+    points -- a département that silently reads as having no water.
+    """
+    points = water.normalize(CALVADOS)["points"]
+
+    assert points, "the whole register was dropped"
+    for point in points:
+        # Calvados sits around Caen: 49.2 N, -0.4 E.
+        assert 48.7 < point["lat"] < 49.5, point
+        assert -1.2 < point["lon"] < 0.6, point
+
+
+def test_a_point_the_sdis_marks_out_of_service_is_not_published():
+    """etat_cod IN means INdisponible, documented by the publisher.
+
+    Sending a crew to a hydrant the map called usable is the failure this layer
+    has to avoid. The fixture holds two such points among six real records.
+    """
+    points = water.normalize(CALVADOS)["points"]
+
+    assert len(points) == 4, "the two INdisponible points must not be published"
+    assert "142258001" not in {p["id"] for p in points}
+    assert "147310016" not in {p["id"] for p in points}
+
+
+def test_calvados_points_carry_their_own_commune_not_the_departement_default():
+    # The département comes from the INSEE code, never a postcode.
+    points = water.normalize(CALVADOS)["points"]
+
+    assert {p["dep"] for p in points} == {"14"}
+
+
+def test_the_documented_famille_decides_the_kind():
+    """famille_id is 1 poteau, 2 bouche, 3 réserve, per the publisher's own notes.
+
+    type_cod is finer (P01, A02, B01...) but the published list ends in "etc.",
+    so it is not read: a code we guessed at would describe the wrong equipment.
+    """
+    kinds = {p["id"]: p["kind"] for p in water.normalize(CALVADOS)["points"]}
+
+    assert kinds["140030010"] == "borne", "famille 1 is a poteau incendie"
+    assert kinds["142580106"] == "borne", "famille 2 is a bouche incendie"
+    assert kinds["141379005"] == "citerne", "famille 3 is a réserve"
+
+
+def test_a_geojson_in_an_unexpected_crs_is_refused_rather_than_guessed():
+    """A republication in Web Mercator must not be read as Lambert-93.
+
+    The same rule the GeoPackage reader follows: an unknown SRS yields nothing,
+    because a wrong projection puts water points in the wrong village.
+    """
+    other = json.loads(json.dumps(FIXTURE["calvados"]))
+    other["crs"]["properties"]["name"] = "EPSG:3857"
+
+    assert water.normalize({"calvados": other})["points"] == []
+
+
+def test_calvados_counts_as_a_whole_departement():
+    coverage = water.normalize(CALVADOS)["coverage"]
+
+    assert [c["scope"] for c in coverage] == ["departement"]
+    assert coverage[0]["dep"] == "14"
+    assert coverage[0]["tier"] == "register"

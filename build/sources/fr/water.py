@@ -4,9 +4,12 @@ This is the one layer aimed at firefighters rather than residents, and it is the
 most fragmented data in the app. DECI is a mayoral competence under a règlement
 départemental, so each SDIS owns its own register by law: there is no national
 authority and therefore no national dataset to wait for. A survey of data.gouv on
-2026-07-29 found 21 candidate datasets, of which eleven are stdlib-parseable and
-reachable — 74,632 points on 2026-07-30, four complete départements, seven local
-patches. That is roughly 9% of France's estimated ~800,000 PEI.
+2026-07-29 found 21 candidate datasets, of which twelve are stdlib-parseable —
+74,632 points on 2026-07-30 from the eleven that answered, four complete
+départements and seven local patches, roughly 9% of France's estimated ~800,000
+PEI. Calvados is the twelfth and would be a fifth complete département; its host
+refuses connections from here while data.gouv's crawler reaches it, so it is
+configured and simply absent on any build that cannot fetch it.
 
 Every point and every coverage row declares `tier: "register"`. A register is
 complete for the area it covers, so absence inside one carries information; a
@@ -19,17 +22,24 @@ expected to render it. A source that yields nothing is never claimed as covered.
 Two traps this module exists to survive:
 
   * **Lambert-93.** SDIS 64 and Grand Annecy publish `x`/`y` in EPSG:2154 beside
-    WGS84 `lon`/`lat`, and the Hérault GeoPackage is *entirely* in EPSG:2154. A
-    six-digit easting read as a longitude lands in the Gulf of Guinea — the
-    French twin of the EPSG:3978 trap the Canadian hotspots hit. Fields are read
-    by name, never positionally; the GeoPackage is reprojected from the srs_id
-    its own metadata declares; and every point is checked against the France box
-    afterwards.
+    WGS84 `lon`/`lat`, the Hérault GeoPackage is *entirely* in EPSG:2154, and so
+    is the Calvados GeoJSON — which is legal, and which no other GeoJSON here
+    does. A six-digit easting read as a longitude lands in the Gulf of Guinea —
+    the French twin of the EPSG:3978 trap the Canadian hotspots hit. Fields are
+    read by name, never positionally; the GeoPackage and the GeoJSON are each
+    reprojected from the CRS their own file declares, and a CRS neither of them
+    can place yields nothing rather than a guess; and every point is checked
+    against the France box afterwards.
   * **Capacity that is not capacity.** Most sources publish flow rate (m³/h) and
     pipe diameter, not stored volume. Only Tarn and the Hérault DFCI set carry a
     real m³ figure, and only on ~2% of points overall. Flow is never converted:
     an unknown capacity is None, and a published 0 is also None, because sending
     a crew to a tank the map called empty is the failure that matters here.
+  * **A point that is not in service.** Only SDIS 14 publishes the state of each
+    PEI, as `etat_cod`: DI disponible, IN indisponible. Those marked IN are
+    dropped rather than published, so a coverage count is a count of water a
+    crew can actually draw. Every other register is silent on the question,
+    which is not the same as every point in them working.
 """
 import csv
 import io
@@ -124,6 +134,28 @@ SOURCES = (
      "url": "https://tabular-api.data.gouv.fr/api/resources"
             "/b685a7ca-8e96-40df-9a69-c1d6c8e37916/data/csv/"},
 
+    # The only GeoJSON here published in Lambert-93, declared in the file's own
+    # crs member and reprojected on that declaration rather than on a flag here.
+    #
+    # It also publishes something no other register does: whether each point is
+    # actually in service. etat_cod IN means INdisponible, per SDIS 14's own
+    # documentation, and those points are dropped rather than published.
+    #
+    # famille_id is the documented family -- 1 poteau, 2 bouche, 3 réserve. The
+    # finer type_cod (P01, A02, B01...) is not read: the published list of codes
+    # ends in "etc.", so the rest would be guesswork about equipment.
+    #
+    # The host refused every connection from two machines on 2026-07-29 and
+    # 2026-07-30, while data.gouv's own crawler fetched all 6,065,991 bytes of
+    # it at 11:48 UTC on 2026-07-30 and reported HTTP 200. It is reachable from
+    # somewhere, so it is configured here: a source that cannot be reached is
+    # simply absent from the payload and costs one failed request per build.
+    {"key": "calvados", "dep": "14", "area": "Calvados", "scope": "departement",
+     "format": "geojson", "id": "num", "insee": "insee",
+     "family": "famille_id", "families": {1: "borne", 2: "borne", 3: "citerne"},
+     "unavailable": ("etat_cod", {"in"}),
+     "url": "https://data.calvados.fr/sdis/deci_pei.geojson"},
+
     {"key": "sixt", "dep": "35", "area": "Sixt-sur-Aff", "scope": "local",
      "format": "csv", "lat": "LONG_PEI", "lon": "LAT_PEI", "delimiter": ";",
      "id": "ID_PEI", "kind": "TYPE_PEI", "insee": "COLL_INSEE",
@@ -131,13 +163,8 @@ SOURCES = (
             "/20191127-131445/sixtsuraff-pei-2019.csv"},
 )
 
-# Two more registers were looked at on 2026-07-30 and are not here:
+# One more register was looked at on 2026-07-30 and is not here:
 #
-#   * DECI - Calvados - SDIS14 (https://data.calvados.fr/sdis/deci_pei.geojson)
-#     still resolves in DNS and drops the connection, as on 2026-07-29. Nothing
-#     mirrors it, so its field names cannot be read and guessing them would
-#     invent coordinates. Add it once the host answers, or once data.gouv parses
-#     a tabular copy the way it did for Seine-Maritime.
 #   * PEI des Alpes-de-Haute-Provence, SDIS 04. data.gouv lists it, but its only
 #     resource is an OGC *web map* service — a Lizmap instance at
 #     https://www.opensis.fr/04/ whose WMS answers and whose WFS returns 403
@@ -363,14 +390,47 @@ def _coordinates(geometry):
     return None if lon is None or lat is None else (lon, lat)
 
 
+def _geojson_crs(body):
+    """The EPSG code a GeoJSON declares, or 4326 when it declares nothing.
+
+    RFC 7946 says GeoJSON is WGS84 and drops the member entirely, but publishers
+    still ship the older form: Calvados writes EPSG:2154 and means it. The code
+    is read from the file rather than pinned to the source, so a republication
+    in another projection cannot be silently read as the old one.
+
+    None for a CRS we cannot place. Guessing puts hydrants in the wrong village.
+    """
+    if not isinstance(body, dict):
+        return None
+    crs = body.get("crs")
+    if crs is None:
+        return EPSG_WGS84
+    name = ""
+    if isinstance(crs, dict):
+        properties = crs.get("properties")
+        name = _text((properties or {}).get("name") if isinstance(properties, dict) else "")
+    # "EPSG:2154", and the URN form "urn:ogc:def:crs:EPSG::2154".
+    digits = name.rsplit(":", 1)[-1]
+    if not digits.isdigit():
+        return None
+    code = int(digits)
+    # CRS84 is WGS84 with the axes in the order GeoJSON already uses.
+    return code if code in (EPSG_WGS84, EPSG_LAMBERT93, 84) else None
+
+
 def _geojson_rows(body):
+    srs = _geojson_crs(body)
+    if srs is None:
+        return
     features = (body or {}).get("features") if isinstance(body, dict) else None
     for feature in features if isinstance(features, list) else ():
         if not isinstance(feature, dict):
             continue
         properties = feature.get("properties")
-        yield (properties if isinstance(properties, dict) else {},
-               _coordinates(feature.get("geometry")))
+        pair = _coordinates(feature.get("geometry"))
+        if pair is not None and srs == EPSG_LAMBERT93:
+            pair = lambert93_to_wgs84(*pair)
+        yield (properties if isinstance(properties, dict) else {}, pair)
 
 
 def _csv_rows(source, body):
@@ -419,6 +479,13 @@ def normalize(payload, cap=MAX_POINTS):
                 break
             if pair is None:
                 continue
+            # A publisher that states a point is out of service is believed.
+            # Sending a crew to a hydrant the map called usable is the failure
+            # this layer exists to avoid, and only Calvados publishes the field.
+            if source.get("unavailable"):
+                field, values = source["unavailable"]
+                if _text(record.get(field)).lower() in values:
+                    continue
             lon, lat = pair
             # The France box is the backstop for every CRS mistake at once: a
             # Lambert-93 easting, a swapped pair no mapping caught, a stray 0/0.
@@ -428,7 +495,15 @@ def normalize(payload, cap=MAX_POINTS):
                 "id": _text(record.get(source["id"])) if source.get("id") else "",
                 "lat": round(lat, 5),
                 "lon": round(lon, 5),
-                "kind": _kind(record.get(source["kind"])) if source.get("kind") else None,
+                # Either the published vocabulary, or a coded family the
+                # publisher documents. Calvados numbers its families and its
+                # finer type_cod list ends in "etc.", so the family is read and
+                # the finer code is not: a code we guessed at would name the
+                # wrong equipment.
+                "kind": (source["families"].get(record.get(source["family"]))
+                         if source.get("family")
+                         else _kind(record.get(source["kind"])) if source.get("kind")
+                         else None),
                 "capacity_m3": _capacity(record.get(source["capacity"]))
                                if source.get("capacity") else None,
                 "dep": _dep(record.get(source["insee"]) if source.get("insee") else None,
