@@ -220,3 +220,16 @@ test('review refuses anything but a moderator making a known decision', async ()
   // Through all of that it stayed unpublished.
   assert.deepEqual((await body(await handle(get('/api/board'), c))).records, []);
 });
+
+test(`the moderator path is itself capped at ${LIMITS.reviewsPerHour} an hour, in case the token leaks`, async () => {
+  const c = ctx();
+  const probe = () => handle(post('/api/review', { id: 'no-such-record', action: 'publish' }, { token: TOKEN }), c);
+  for (let i = 0; i < LIMITS.reviewsPerHour; i += 1) {
+    assert.equal((await probe()).status, 404, `review ${i + 1} of the allowance was refused`);
+  }
+  assert.equal((await probe()).status, 429);
+
+  // Generous enough that a real moderator clearing a real queue never meets it:
+  // it is a ceiling on a stolen token, not on the human.
+  assert.ok(LIMITS.reviewsPerHour > LIMITS.writesPerHourGlobal);
+});

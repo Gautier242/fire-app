@@ -15,6 +15,7 @@ export const LIMITS = {
   contactChars: 120,
   writesPerIpPerHour: 5,
   writesPerHourGlobal: 200,
+  reviewsPerHour: 600,
   recordLifetimeMs: 48 * 60 * 60 * 1000,
   readCap: 200,
 };
@@ -210,6 +211,12 @@ async function queue(request, ctx) {
 async function review(request, ctx) {
   const refusal = moderatorRefusal(request, ctx);
   if (refusal) return refusal;
+
+  // A stolen token gets an hour's worth of damage, not unlimited publishing. The
+  // number is far above any human moderation rate, so it never blocks the owner.
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!await within(ctx, `mod:${ip}`, LIMITS.reviewsPerHour)) return tooMany(ctx);
+  if (!await within(ctx, 'mod:all', LIMITS.reviewsPerHour)) return tooMany(ctx);
 
   const raw = await request.text();
   if (byteLength(raw) > LIMITS.bodyBytes) return json(413, { error: 'too large' });
