@@ -530,3 +530,18 @@ test('the moderation queue is never cached, the public board briefly is', async 
   assert.equal(refused.status, 422);
   assert.match(refused.headers.get('Cache-Control') || 'no-store', /no-store/);
 });
+
+test('money words are refused even when the sentence is reassuring', async () => {
+  // A deliberate false positive, recorded so it is a known choice and not a
+  // surprise: "gratuit, aucun paiement demande" is a *good* signal from a
+  // genuine offer, and it is still refused because it contains a money word.
+  //
+  // The alternative is parsing negation in two languages, which fails in the
+  // dangerous direction the first time it reads "no payment needed, just send
+  // 50 EUR for fuel". The refusal names the reason, so the submitter rephrases.
+  const c = ctx();
+  const response = await handle(post('/api/submit', { ...OFFER, text: 'Hebergement gratuit, aucun paiement demande.' }), c);
+  assert.equal(response.status, 422);
+  assert.match((await body(response)).error, /no money and no credentials/);
+  assert.equal(c.store._size(), 0);
+});
