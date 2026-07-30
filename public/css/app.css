@@ -386,6 +386,18 @@ dd.air { color: var(--air); }
    first, so the amber polygons and the purple point sublayer land on the same
    blue instead of two unrelated ones. Not cosmetic: removing this ships amber. */
 .effis-scar { filter: sepia(1) hue-rotate(185deg) saturate(2.5) brightness(0.9); }
+.seg.scar-pick {
+  align-items: center; gap: 6px; padding: 0 8px;
+  font: inherit; color: var(--muted);
+}
+.seg.scar-pick select {
+  background: transparent; color: var(--ink); border: none;
+  font: inherit; padding: 6px 2px;
+}
+/* The label carries a blank-layer explanation when EFFIS has nothing for the
+   chosen year, and that sentence must be readable rather than clipped: silence
+   about an empty archive is exactly what it exists to prevent. */
+.seg.scar-pick #scar-label { font-size: .78rem; max-width: 46ch; }
 .leaflet-popup-content { font-size: 0.9rem; }
 .leaflet-popup-content b { font-family: var(--mono); font-size: 0.82rem; }
 

@@ -3,6 +3,7 @@
 import { aqhiBand } from './status.js';
 import { tileUrl } from './imagery.js';
 import { ENDPOINT as EFFIS_ENDPOINT } from './effis.js';
+import { trailOpacity } from './history.js';
 
 const CANADA_CENTRE = [56, -96];
 const CANADA_ZOOM = 4;
@@ -536,15 +537,22 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
     // growth is visible rather than remembered.
     drawHistory(points) {
       layers.history.clearLayers();
+      // The oldest age present, so the ramp stretches over whatever is on screen:
+      // three passes for Canada's scrubber, 41 for France's seven-day trail.
+      const oldest = points.reduce((max, p) => Math.max(max, p.age), 0);
+      // A week of French detections is ~8,600 circles. As SVG that stutters on a
+      // phone, which is the device someone reads this on. One canvas for the whole
+      // layer draws them in a single pass; the layer is non-interactive anyway.
+      const renderer = points.length > 2000 ? L.canvas({ padding: 0.5 }) : undefined;
       for (const p of points) {
-        const fade = [1, 0.45, 0.2][p.age] ?? 0.15;
         L.circleMarker([p.lat, p.lon], {
           radius: p.age === 0 ? 6 : 4,
           color: HEAT[p.band] || HEAT[0],
           fillColor: HEAT[p.band] || HEAT[0],
           weight: 0,
-          fillOpacity: (p.foreign ? 0.25 : 1) * fade,
+          fillOpacity: (p.foreign ? 0.25 : 1) * trailOpacity(p.age, oldest),
           interactive: false,
+          renderer,
         }).addTo(layers.history);
       }
     },

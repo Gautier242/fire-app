@@ -46,6 +46,22 @@ export function inCanada(lon, lat) {
 
 // Points for one pass, plus the two before it drawn faintly so direction of
 // growth is visible rather than inferred from memory.
+// How bright a pass of a given age draws, against the oldest age on screen.
+//
+// This was a three-element lookup, which is right for a scrubber stepping through
+// a few passes and wrong for a trail: France's window holds 41 observed passes
+// over seven days, and indexing a three-element array rendered 38 of them at the
+// same floor value. Computed from the age instead, so the ramp stretches to
+// however many passes are actually shown.
+//
+// The floor is deliberate. The oldest pass stays visible because the point of the
+// layer is where the fire has been, and a detection that fades to nothing says
+// nothing was there.
+export function trailOpacity(age, oldest) {
+  if (!oldest) return 1;
+  return Math.max(0.15, 1 - 0.85 * (age / oldest));
+}
+
 export function pointsForPass(history, passes, index, trail = 2) {
   if (!history || !passes.length) return [];
   const shown = passes.slice(Math.max(0, index - trail), index + 1);

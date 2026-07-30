@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  hourToDate, inCanada, observedPasses, passLabel, pointsForPass, windAt, windToward,
+  hourToDate, inCanada, observedPasses, passLabel, pointsForPass, trailOpacity,
+  windAt, windToward,
 } from '../public/js/history.js';
 
 const HISTORY = {
@@ -110,4 +111,39 @@ test('a payload with no border tag still falls back to the Canada test', () => {
   const passes = observedPasses(HISTORY);
   const oregon = pointsForPass(HISTORY, passes, 2).find((p) => p.lat === 45.5);
   assert.equal(oregon.foreign, true);
+});
+
+test('the trail fades across every pass it is given, not just three', () => {
+  // Canada's window holds a handful of passes; France's holds 41 over 7 days.
+  // A 3-element ramp renders 41 passes as three, which is a scrubber, not a trail.
+  assert.equal(trailOpacity(0, 40), 1, 'the newest pass is fully opaque');
+  const mid = trailOpacity(20, 40);
+  const old = trailOpacity(40, 40);
+  assert.ok(mid < 1 && mid > old, 'a mid-age pass sits between newest and oldest');
+  assert.ok(old >= 0.12, 'the oldest pass stays visible rather than vanishing');
+
+  // Monotonic: older is never brighter than newer. This is the property that
+  // makes the layer readable as a direction of travel.
+  for (let age = 1; age <= 40; age += 1) {
+    assert.ok(trailOpacity(age, 40) <= trailOpacity(age - 1, 40),
+      `age ${age} is brighter than age ${age - 1}`);
+  }
+});
+
+test('a single-pass trail does not divide by zero', () => {
+  assert.equal(trailOpacity(0, 0), 1);
+});
+
+test('Canada still reads newest-brightest through oldest-faintest', () => {
+  // Not asserting the old literal values -- asserting the property they encoded.
+  const [a, b, c] = [trailOpacity(0, 2), trailOpacity(1, 2), trailOpacity(2, 2)];
+  assert.equal(a, 1);
+  assert.ok(a > b && b > c, 'the three-pass ordering is unchanged');
+});
+
+test('every pass is reachable when the caller asks for the whole window', () => {
+  const passes = observedPasses(FR_HISTORY);
+  const all = pointsForPass(FR_HISTORY, passes, passes.length - 1, passes.length);
+  assert.equal(all.length, FR_HISTORY.points.length, 'no detection is dropped');
+  assert.deepEqual([...new Set(all.map((p) => p.age))].sort(), [0, 1]);
 });

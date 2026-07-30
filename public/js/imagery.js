@@ -59,9 +59,13 @@ export const LAYERS = [
     // and the burn scar's growth becomes visible. Disturbance, not fire
     // detection — a clear-cut or a flood shows here too, so the label says
     // "vegetation" rather than claiming every pixel is a fire.
+    // The label names fire first because that is what a reader is looking for,
+    // and names the other causes in the same breath so it never claims a burn.
+    // The design spec asked for "zones deja brulees" here; that would have been
+    // less honest than what was already shipping, so it is not what this says.
     label: {
-      fr: 'Végétation détruite · 30 m · alertes',
-      en: 'Vegetation loss · 30 m · alerts',
+      fr: 'Végétation détruite (feu, coupe) · 30 m',
+      en: 'Vegetation loss (fire, felling) · 30 m',
     },
     kind: 'gibs', dated: true, maxNativeZoom: 12,
     template: `${GIBS}/OPERA_L3_DIST-ALERT-HLS_Color_Index/default/{date}/GoogleMapsCompatible_Level12/{z}/{y}/{x}.png`,

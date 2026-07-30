@@ -83,6 +83,16 @@
         <button class="chip" data-layer="satellite" aria-pressed="false" data-adv>
           <i class="sw sat"></i><span>Image satellite</span>
         </button>
+        <button class="chip" data-layer="history" aria-pressed="false" id="chip-trail" data-adv>
+          <i class="sw hist"></i><span>Chaleur sur 7 jours</span>
+        </button>
+
+        <label class="seg scar-pick" id="scar-pick" data-adv>
+          <span id="scar-label">Saison passée</span>
+          <select id="scar-year" aria-label="Zones brûlées, saison passée">
+            <option value="">Aucune</option>
+          </select>
+        </label>
 
         <div class="seg basemap" id="basemap" role="group" aria-label="Fond de carte">
           <button data-base="plain" aria-pressed="true">Carte</button>
