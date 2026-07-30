@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Où trouver de l'aide — Feux Près De Moi</title>
+  <meta name="description" content="Les pages où l'aide s'organise : préfecture, pompiers, associations, groupes d'entraide. Des liens, rien de plus — ce site n'en lit aucune.">
+  <!-- Relative, not root-absolute: the site ships to a project page served from
+       /fire-app/, where /css/app.css resolves to the domain root and 404s. -->
+  <link rel="stylesheet" href="../css/app.css">
+  <style>
+    /* Page layout only. Everything visual comes from app.css.
+       app.css sets body{overflow:hidden} for the map shell; a document page has
+       to undo that or it cannot be scrolled. */
+    body { overflow: auto; }
+    .doc {
+      max-width: 44rem; margin: 0 auto; min-height: 100dvh;
+      border-right: 1px solid var(--line); border-left: 1px solid var(--line);
+    }
+    .doc-head { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+    .doc-head nav { display: flex; gap: 12px; align-items: center; }
+    .prose { padding: 22px 20px 4px; }
+    .prose h1 { margin: 0; font-size: 1.7rem; line-height: 1.22; letter-spacing: -0.022em; }
+    .prose p { margin: 9px 0 0; color: var(--muted); font-size: 0.97rem; }
+
+    .tiers { padding: 4px 20px 0; }
+    .tier { margin-top: 30px; }
+    /* The tier heading is the loudest thing in each block on purpose: it names
+       who publishes the pages under it, which is the only thing we can know. */
+    .tier h2 {
+      margin: 0 0 6px; font-family: var(--mono); font-size: 0.67rem;
+      text-transform: uppercase; letter-spacing: 0.11em; color: var(--faint);
+      font-weight: 500;
+    }
+    .warn, .stale {
+      border-left: 3px solid var(--caution); background: var(--raised);
+      padding: 10px 13px; margin: 0 0 12px;
+      color: var(--ink); font-size: 0.88rem;
+    }
+    .stale { margin: 16px 20px 0; }
+
+    .link {
+      display: block; background: var(--surface); border: 1px solid var(--line);
+      border-radius: var(--r); padding: 12px 14px; margin-bottom: 8px;
+      text-decoration: none; color: var(--ink);
+    }
+    .link:hover { border-color: var(--faint); }
+    .link b { display: block; font-weight: 600; }
+    .link .note { display: block; color: var(--muted); font-size: 0.88rem; }
+    /* Reachability is a statement about our own check, never about the page's
+       contents, so it stays a small mono aside rather than a verdict. */
+    .link .state {
+      display: block; margin-top: 3px;
+      font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.04em;
+    }
+    .link .state.down { color: var(--danger); }
+    .link .state.unknown { color: var(--faint); }
+  </style>
+</head>
+<body>
+  <main class="rail doc">
+    <div class="rail-head doc-head">
+      <div class="brand">Feux<span>·</span>Près<span>·</span>De<span>·</span>Moi</div>
+      <nav>
+        <a class="btn-ghost" href="./" id="map-link">Voir la carte</a>
+        <button class="btn-ghost" id="lang">English</button>
+      </nav>
+    </div>
+
+    <div class="prose">
+      <h1 id="title">Où trouver de l'aide</h1>
+      <!-- A reader must know what they are being handed before they follow a
+           link: a list of addresses, not anything this site has read. -->
+      <p id="lede"></p>
+      <p id="emergency"></p>
+    </div>
+
+    <div class="stale" id="stale" hidden></div>
+    <div class="tiers" id="tiers" aria-live="polite"></div>
+
+    <div class="rail-foot">
+      <a href="./" id="back-link">Carte France</a>
+      <a href="zone.html" id="zone-link">Vue locale</a>
+      <a href="sources.html" id="src-link">Sources</a>
+    </div>
+  </main>
+
+  <script type="module" src="../js/relay-page.js"></script>
+</body>
+</html>
