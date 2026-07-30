@@ -468,3 +468,27 @@ test('a missing KV binding fails closed instead of serving an empty board', asyn
   const response = await worker.fetch(get('/api/board'), { MODERATOR_TOKEN: TOKEN });
   assert.equal(response.status, 503);
 });
+
+test('the oldest waiting record is always the one a moderator can reach', async () => {
+  // The read cap is 200 and a 48-hour backlog can be far larger, so which 200 a
+  // read returns decides whether the queue can ever be drained. Ids carry the
+  // creation time so the store's own key order is chronological.
+  const c = ctx();
+  const ids = [];
+  for (let i = 0; i < 3; i += 1) {
+    c.at = T0 + i * 1000;
+    ids.push((await body(await handle(post('/api/submit', OFFER), c))).id);
+  }
+  assert.deepEqual([...ids].sort(), ids, 'ids must sort chronologically or FIFO is impossible');
+
+  // And the order is not left to the store: a store handing records back newest
+  // first still yields oldest first.
+  const record = (n) => [`rec:${n}`, {
+    id: String(n), kind: 'offer', category: 'shelter', area: '33', text: `offre ${n}`,
+    contact: 'via la mairie', published: true, createdAt: T0 + n, publishedAt: T0 + n,
+    expiresAt: T0 + LIMITS.recordLifetimeMs, provenance: { via: 'public-form' },
+  }];
+  const reversed = ctx({ store: memoryStore([record(3), record(2), record(1)]) });
+  const { records } = await body(await handle(get('/api/board'), reversed));
+  assert.deepEqual(records.map((r) => r.text), ['offre 1', 'offre 2', 'offre 3']);
+});

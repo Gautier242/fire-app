@@ -121,7 +121,12 @@ async function submit(request, ctx) {
   if (!await within(ctx, 'all', LIMITS.writesPerHourGlobal)) return tooMany(ctx);
 
   const record = {
-    id: crypto.randomUUID(),
+    // The creation time leads the id so that a store listing keys in
+    // lexicographic order — which is what KV does — hands back the oldest first.
+    // A 48-hour backlog can be many times the 200-record read cap, and a
+    // moderator who can only ever see an arbitrary 200 of it can never drain it.
+    // Thirteen digits stay fixed-width until the year 2286.
+    id: `${String(ctx.now()).padStart(13, '0')}-${crypto.randomUUID()}`,
     kind: posted.kind,
     category: posted.category,
     area: posted.area,
@@ -206,7 +211,10 @@ const live = (record, ctx) => record && record.expiresAt > ctx.now();
 async function readRecords(ctx) {
   const scanned = await ctx.store.list(RECORD, LIMITS.readCap + 1);
   const truncated = scanned.length > LIMITS.readCap;
-  const records = scanned.slice(0, LIMITS.readCap).filter((record) => live(record, ctx));
+  const records = scanned
+    .slice(0, LIMITS.readCap)
+    .filter((record) => live(record, ctx))
+    .sort((a, b) => a.createdAt - b.createdAt);
   return { records, truncated };
 }
 
