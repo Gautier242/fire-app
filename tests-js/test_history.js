@@ -70,3 +70,44 @@ test('pass labels render in the viewer local time without crashing on bad input'
   assert.equal(passLabel({ generated_at: 'nonsense' }, 71), '');
   assert.equal(passLabel(null, 71), '');
 });
+
+// France's trail is 168 hours, not Canada's 72, and its border cannot be
+// guessed from a latitude. Both were hardcoded for Canada.
+const FR_HISTORY = {
+  generated_at: '2026-07-30T14:00:00Z',
+  hours: 168,
+  points: [
+    [-0.88, 44.86, 167, 2, false],  // Gironde, newest
+    [-0.90, 44.80, 143, 1, false],  // a day earlier
+    [-5.41, 42.66, 167, 2, true],   // Leon, Spain: in the bbox, not in France
+  ],
+  wind: [],
+};
+
+test('the newest hour comes from the window length, not a hardcoded 71', () => {
+  // Canada is unchanged: its window is 72 hours, so its newest hour is 71.
+  assert.equal(hourToDate(HISTORY, 71).toISOString(), '2026-07-28T20:00:00.000Z');
+  // France's window is 168 hours. Reading 71 as newest would date every French
+  // detection 96 hours early -- a four-day-old fire shown as happening now.
+  assert.equal(hourToDate(FR_HISTORY, 167).toISOString(), '2026-07-30T14:00:00.000Z');
+  assert.equal(hourToDate(FR_HISTORY, 143).toISOString(), '2026-07-29T14:00:00.000Z');
+});
+
+test('a server-tagged border beats the client guess', () => {
+  const passes = observedPasses(FR_HISTORY);
+  const newest = pointsForPass(FR_HISTORY, passes, passes.length - 1);
+  const leon = newest.find((p) => p.lon === -5.41);
+  const gironde = newest.find((p) => p.lon === -0.88);
+  // inCanada() would call Leon Canadian (lat 42.66 < 45 -> foreign is true by
+  // luck) but Gironde French-and-foreign is the real failure: lat 44.86 < 45,
+  // so the Canada heuristic flags the whole Gironde front as foreign.
+  assert.equal(inCanada(-0.88, 44.86), false, 'the Canada guess misreads France');
+  assert.equal(gironde.foreign, false, 'a French detection must not be faded');
+  assert.equal(leon.foreign, true, 'a Spanish detection must stay flagged');
+});
+
+test('a payload with no border tag still falls back to the Canada test', () => {
+  const passes = observedPasses(HISTORY);
+  const oregon = pointsForPass(HISTORY, passes, 2).find((p) => p.lat === 45.5);
+  assert.equal(oregon.foreign, true);
+});

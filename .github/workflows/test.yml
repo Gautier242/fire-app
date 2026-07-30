@@ -17,4 +17,7 @@ jobs:
       # The glob is required: node --test only auto-discovers *.test.js,
       # *_test.js, test-*.js, or files under a dir named test. Ours are
       # test_geo.js and friends, so a bare directory arg finds nothing.
-      - run: node --test tests-js/*.js
+      # worker/ is listed explicitly for the same reason: its tests guard the
+      # moderation queue's rate limits and field allowlist, and were running
+      # only on the author's machine until this line existed.
+      - run: node --test tests-js/*.js worker/test_*.js

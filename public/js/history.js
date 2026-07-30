@@ -11,12 +11,16 @@ export function observedPasses(history) {
   return [...new Set(history.points.map((p) => p[2]))].sort((a, b) => a - b);
 }
 
-// hour 71 is the newest hour observed, and generated_at is its timestamp.
+// The last hour of the window is the newest observed, and generated_at is its
+// timestamp. The window length comes from the payload: Canada's is 72 hours and
+// France's is 168, so a hardcoded 71 would date every French detection 96 hours
+// early -- a four-day-old burn shown as happening now.
 export function hourToDate(history, hour) {
   if (!history || !history.generated_at) return null;
   const newest = new Date(history.generated_at);
   if (Number.isNaN(newest.getTime())) return null;
-  return new Date(newest.getTime() - (71 - hour) * 3600 * 1000);
+  const last = (history.hours || 72) - 1;
+  return new Date(newest.getTime() - (last - hour) * 3600 * 1000);
 }
 
 export function passLabel(history, hour, lang = 'en') {
@@ -48,8 +52,15 @@ export function pointsForPass(history, passes, index, trail = 2) {
   const ageOf = new Map(shown.map((hour, i) => [hour, shown.length - 1 - i]));
   return history.points
     .filter((p) => ageOf.has(p[2]))
-    .map(([lon, lat, hour, band]) => ({
-      lon, lat, band, age: ageOf.get(hour), foreign: !inCanada(lon, lat),
+    .map(([lon, lat, hour, band, foreign]) => ({
+      lon,
+      lat,
+      band,
+      age: ageOf.get(hour),
+      // The server tags the border where it can, against real département
+      // polygons. Trust that over inCanada(), whose lat >= 45 test calls the
+      // whole Gironde front foreign and Leon in Spain domestic.
+      foreign: foreign === undefined ? !inCanada(lon, lat) : foreign,
     }));
 }
 
