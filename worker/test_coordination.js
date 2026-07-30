@@ -302,3 +302,46 @@ test('a public read says where the entry came from, so it never reads as officia
   assert.equal(records[0].provenance.reviewedAt, T0);
   assert.equal(records[0].createdAt, T0);
 });
+
+// Matching: a reader wants the needs they can meet, near them.
+async function seedBoard(c) {
+  const entries = [
+    { kind: 'need', category: 'shelter', area: '33', text: 'Famille de 4 cherche un toit ce soir.' },
+    { kind: 'offer', category: 'shelter', area: '33', text: 'Deux lits libres.' },
+    { kind: 'offer', category: 'water', area: '33', text: 'Piscine utilisable par les pompiers.' },
+    { kind: 'offer', category: 'transport', area: '40', text: 'Je peux conduire deux personnes.' },
+  ];
+  for (const [i, entry] of entries.entries()) {
+    await published(c, { ...entry, contact: 'via la mairie' });
+    // Each poster gets their own address so the per-address limit stays clear of this.
+    void i;
+  }
+}
+
+test('the board can be filtered to what a reader can actually use', async () => {
+  const c = ctx();
+  await seedBoard(c);
+
+  const only = async (query) => (await body(await handle(get(`/api/board${query}`), c))).records;
+
+  assert.equal((await only('')).length, 4);
+  assert.equal((await only('?area=33')).length, 3);
+  assert.equal((await only('?area=40')).length, 1);
+  assert.equal((await only('?kind=need')).length, 1);
+  assert.equal((await only('?category=shelter,water')).length, 3);
+
+  const combined = await only('?area=33&kind=offer&category=shelter');
+  assert.equal(combined.length, 1);
+  assert.equal(combined[0].text, 'Deux lits libres.');
+});
+
+test('an unusable filter is refused rather than quietly ignored', async () => {
+  const c = ctx();
+  await seedBoard(c);
+  // Silently dropping a filter would show a reader entries from another
+  // departement as though they were local. That is worse than an error.
+  for (const query of ['?area=99', '?area=33260', '?kind=command', '?category=weapons', '?departement=33']) {
+    const response = await handle(get(`/api/board${query}`), c);
+    assert.equal(response.status, 422, `${query} was not refused`);
+  }
+});

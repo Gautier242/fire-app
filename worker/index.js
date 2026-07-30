@@ -78,7 +78,7 @@ export async function handle(request, ctx) {
       return method === 'POST' ? await submit(request, ctx) : json(405, { error: 'method' });
     }
     if (pathname === '/api/board') {
-      return method === 'GET' ? await board(ctx) : json(405, { error: 'method' });
+      return method === 'GET' ? await board(request, ctx) : json(405, { error: 'method' });
     }
     if (pathname === '/api/queue') {
       return method === 'GET' ? await queue(request, ctx) : json(405, { error: 'method' });
@@ -225,8 +225,42 @@ const publicView = (record) => ({
   provenance: record.provenance,
 });
 
-async function board(ctx) {
-  const records = (await readRecords(ctx)).filter((r) => r.published).map(publicView);
+const FILTERS = ['area', 'kind', 'category'];
+
+// Matching is this: a reader asks for the needs they can meet, in their
+// departement. An unusable filter is refused rather than dropped — quietly
+// ignoring ?area= would show somebody entries from the other end of France as
+// though they were next door, which is worse than an error message.
+function filterFrom(params) {
+  for (const name of params.keys()) {
+    if (!FILTERS.includes(name)) return { error: `unknown filter: ${name}` };
+  }
+  const wanted = {};
+  if (params.has('area')) {
+    const area = params.get('area');
+    if (!AREA.test(area)) return { error: 'area must be a departement code' };
+    wanted.area = [area];
+  }
+  for (const [name, vocabulary] of [['kind', KINDS], ['category', CATEGORIES]]) {
+    if (!params.has(name)) continue;
+    const values = params.get(name).split(',').map((v) => v.trim()).filter(Boolean);
+    if (!values.length) return { error: `${name} filter is empty` };
+    for (const value of values) {
+      if (!vocabulary.includes(value)) return { error: `unknown ${name}: ${value}` };
+    }
+    wanted[name] = values;
+  }
+  return { wanted };
+}
+
+async function board(request, ctx) {
+  const { wanted, error } = filterFrom(new URL(request.url).searchParams);
+  if (error) return json(422, { error });
+
+  const records = (await readRecords(ctx))
+    .filter((r) => r.published)
+    .filter((r) => Object.entries(wanted).every(([field, values]) => values.includes(r[field])))
+    .map(publicView);
   return json(200, { records });
 }
 
