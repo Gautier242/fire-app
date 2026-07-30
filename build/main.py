@@ -51,6 +51,28 @@ def sections_for(country):
     return dict(SECTIONS[country])
 
 
+# Sections whose emptiness would misinform rather than merely omit. Empty here,
+# after the source that owns the section failed, stops the deploy so the previous
+# build keeps serving. Stale data carries its own timestamp; zero fires reads as
+# nothing burning, which is the absence-is-never-safety rule broken at the data
+# layer rather than in the copy.
+#
+# This lived in the workflow YAML until France published fires 304 -> 0 on a FIRMS
+# timeout: the list named fires for Canada and not for France, and no test could
+# see it. Keep it here so adding a country cannot quietly skip its fire list.
+CRITICAL_SECTIONS = {
+    "ca": ("fires", "evacuations"),
+    "fr": ("fires", "danger"),
+}
+
+
+def critical_sections(country):
+    if country not in CRITICAL_SECTIONS:
+        raise ValueError(f"unknown country {country!r}; "
+                         f"expected one of {sorted(CRITICAL_SECTIONS)}")
+    return CRITICAL_SECTIONS[country]
+
+
 def fetchers_for(country, session):
     if country == "ca":
         return {

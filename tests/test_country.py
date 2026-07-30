@@ -7,8 +7,32 @@ empty summary, and the rule that absence of data never renders as safety.
 """
 import pytest
 
-from build.main import build, sections_for, fetchers_for
+from build.main import build, sections_for, fetchers_for, critical_sections
 from build.registry import coverage_payload
+
+
+def test_every_country_guards_its_fire_list_against_publishing_empty():
+    """An empty fire list after a failed fetch must stop the deploy.
+
+    This is the absence-is-never-safety rule at the data layer. On 2026-07-29 the
+    France build published with fires 304 -> 0 after FIRMS timed out on the
+    runner, because the publish gate's critical list named fires for Canada and
+    not for France. Serving the previous build stale is honest; serving zero
+    fires tells a reader nothing is burning.
+    """
+    for country in ("ca", "fr"):
+        owners = sections_for(country)
+        assert "fires" in owners.values(), f"{country} must have a fire section"
+        assert "fires" in critical_sections(country), (
+            f"{country} publishes a fire list, so an empty one after a fetch "
+            f"failure must refuse to publish")
+
+
+def test_a_critical_section_is_one_the_country_actually_has():
+    # France has no evacuation feed, so guarding one would refuse forever.
+    for country in ("ca", "fr"):
+        sections = set(sections_for(country).values())
+        assert set(critical_sections(country)) <= sections
 
 
 def test_each_country_declares_its_own_sections():

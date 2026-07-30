@@ -89,10 +89,8 @@ jobs:
         run: |
           python - <<'EOF'
           import json, os, sys
-          from build.main import sections_for
+          from build.main import sections_for, critical_sections
 
-          # Sections whose emptiness would misinform rather than merely omit.
-          CRITICAL = {"ca": ("fires", "evacuations"), "fr": ("danger",)}
           problems = []
 
           for country, path in (("ca", "public/data/summary.json"),
@@ -109,7 +107,7 @@ jobs:
                         if isinstance(v, list) and k != "sources"}
               print(f"{country}: {counts}")
               print(f"{country}: stale sources:", ", ".join(sorted(failed)) or "none")
-              for section in CRITICAL[country]:
+              for section in critical_sections(country):
                   if not summary.get(section) and any(owners[i] == section for i in failed):
                       problems.append(f"{country}/{section}")
 
