@@ -89,6 +89,16 @@
         <ul id="avoid-list"></ul>
       </div>
 
+      <!-- 3b. Which roads lead into the modelled path. A narrowing of attention,
+           never a direction: the model has one fuel type and is validated against
+           no real fire. -->
+      <div class="block" id="egress-block" hidden>
+        <h3 id="egress-title"></h3>
+        <p id="egress-note"></p>
+        <ul id="egress-list"></ul>
+        <p id="egress-caveat"></p>
+      </div>
+
       <!-- 4. Who is fighting it. An observation, never a claim about the
            response — and the ground note is unconditional. -->
       <div class="block" id="forces-block">
@@ -139,6 +149,9 @@
         </button>
         <button class="chip" data-layer="burnt" aria-pressed="true" id="chip-burnt">
           <i class="sw hist"></i><span>Déjà brûlé</span>
+        </button>
+        <button class="chip" data-layer="egress" aria-pressed="false" id="chip-egress">
+          <i class="sw road"></i><span>Routes vers le feu</span>
         </button>
         <button class="chip" data-layer="history" aria-pressed="false" id="chip-trail">
           <i class="sw hist"></i><span>Chaleur sur 7 jours</span>

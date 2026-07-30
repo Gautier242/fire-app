@@ -150,6 +150,9 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
     official: L.layerGroup(),
     evacuated: L.layerGroup(),
     burnt: L.layerGroup(),
+    // Roads heading into the modelled spread. Its own group so a reader can drop a
+    // modelled overlay without losing the observed closures underneath it.
+    egress: L.layerGroup(),
     satellite: gibs,
     // Rain matters to a fire: it is the thing that stops one. RainViewer
     // publishes a free radar mosaic, refreshed roughly every ten minutes.
@@ -277,6 +280,25 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
         }).bindPopup(`<b>${labels.detour || 'Déviation'}</b><br>${detour.road || ''}`
           + `<br><small>${local.source || ''}</small>`)
           .addTo(layers.official);
+      }
+      raiseLive();
+    },
+
+    // Roads that lead into the modelled spread.
+    //
+    // Only these are drawn. A verdict on every road would render mostly red for a
+    // downwind reader, and a map where everything is flagged says nothing. Dashed,
+    // because the flag is inherited from a model, and an unmarked road is not
+    // thereby safe -- the rail says so in words the map cannot.
+    drawEgress(roads, labels = {}) {
+      layers.egress.clearLayers();
+      for (const road of roads || []) {
+        if (!road.points || road.points.length < 2) continue;
+        L.polyline(road.points, {
+          color: '#E8A33D', weight: 6, opacity: 0.75, dashArray: '2 9',
+        }).bindPopup(`<b>${labels.toward || ''}</b>`
+          + (road.name ? `<br>${road.name}` : ''))
+          .addTo(layers.egress);
       }
       raiseLive();
     },
@@ -579,6 +601,22 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
             + `<br><i>${labels.spreadCaveat}</i>`)
             .addTo(layers.spread);
         }
+      }
+
+      // Where the detections put the fire's edge, for ground nobody has surveyed.
+      //
+      // Dashed and hollow, deliberately. The Gironde perimeter is drawn solid because
+      // responders walked it; this is a convex hull over 375 m satellite pixels, so it
+      // fills in unburnt interior, bridges a horseshoe front, and is a model. A reader
+      // must be able to tell the two apart at a glance, without a caption.
+      for (const boundary of (zone && zone.boundaries) || []) {
+        L.polygon(boundary.ring.map(([lon, lat]) => [lat, lon]), {
+          color: HEAT[2], weight: 2, dashArray: '10 7',
+          fillColor: HEAT[2], fillOpacity: 0.07,
+        }).bindPopup(`<b>${labels.boundary || 'Étendue estimée'}</b>`
+          + `<br>${boundary.detections} ${labels.detections || 'détections'}`
+          + `<br><i>${labels.boundaryCaveat || ''}</i>`)
+          .addTo(layers.spread);
       }
 
       // Which way the wind is actually blowing, as an arrow on the ground.

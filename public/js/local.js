@@ -3,7 +3,7 @@
 // Answers five questions in the order somebody in danger asks them: am I in
 // danger, where is it going, where must I not go, who is fighting it, what can I
 // do. Pure — no DOM, no Leaflet.
-import { bearingDeg, compassPoint, nearest } from './geo.js';
+import { bearingDeg, compassPoint, haversineKm, nearest } from './geo.js';
 
 const URGENT_KM = 10;
 const NEAR_KM = 30;
@@ -117,5 +117,63 @@ export function describeLocal({ zone, point, lang = 'fr' }) {
       groundNote: t.ground,
     },
     nearestKm: km,
+  };
+}
+
+
+/* ---------------- official data, narrowed to the reader ---------------- */
+
+// The nearest vertex of a geometry, in km. Cheap and sufficient: these are road
+// lines and commune polygons a few km across, and the question is only whether any
+// part of one is near enough to concern this reader.
+function nearestKm(geometry, from) {
+  if (!geometry || !geometry.coordinates) return Infinity;
+  let best = Infinity;
+  const walk = (node) => {
+    if (typeof node[0] === 'number') {
+      best = Math.min(best, haversineKm(from, { lon: node[0], lat: node[1] }));
+      return;
+    }
+    for (const child of node) walk(child);
+  };
+  walk(geometry.coordinates);
+  return best;
+}
+
+// A département's crisis feed, narrowed to what is actually near this reader.
+//
+// The feed covers one département. Handing all of it to a reader elsewhere is worse
+// than handing them nothing: the Landes zone page briefly rendered "236 routes
+// coupées publiées par le Département de la Gironde", which invites somebody 80 km
+// away to believe roads near them are shut.
+//
+// Narrowed by distance rather than by a list of covered département codes, so it
+// stays correct for any zone and for an address the reader typed themselves, with no
+// configuration to drift out of date.
+//
+// `covered` false and `available` false mean different things and both are reported:
+// outside the coverage, versus unable to ask.
+export function officialNear(feed, from, radiusKm = 50) {
+  const empty = {
+    available: Boolean(feed && feed.available),
+    covered: false,
+    source: (feed && feed.source) || null,
+    closures: [], detours: [], evacuations: [], burn_area: null,
+  };
+  if (!feed || !feed.available || !from) return empty;
+
+  const near = (item) => nearestKm(item.geometry, from) <= radiusKm;
+  const closures = (feed.closures || []).filter(near);
+  const detours = (feed.detours || []).filter(near);
+  const evacuations = (feed.evacuations || []).filter(near);
+  const burn = feed.burn_area && near(feed.burn_area) ? feed.burn_area : null;
+
+  return {
+    available: true,
+    // Nothing of this feed within reach means this reader is not in its département,
+    // whatever the feed says it covers.
+    covered: Boolean(closures.length || evacuations.length || burn || detours.length),
+    source: feed.source || null,
+    closures, detours, evacuations, burn_area: burn,
   };
 }

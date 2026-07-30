@@ -209,7 +209,7 @@ def _median_slope(grid):
     return values[len(values) // 2] if values else None
 
 
-def _build_zones(summary, session, out, wildfires):
+def _build_zones(summary, session, out, wildfires, surveyed=()):
     """Pre-build detail files for today's hot zones.
 
     Every zone is independent and its failure is contained: the browser can fetch
@@ -260,7 +260,8 @@ def _build_zones(summary, session, out, wildfires):
         try:
             zone_build.write_zone(zone_dir, zone, wildfires, wind_rows,
                                   terrain=None, spread=projections,
-                                  closures=summary.get("closures"))
+                                  closures=summary.get("closures"),
+                                  official_perimeter=zone["id"] in surveyed)
             built.append(zone)
         except Exception:  # noqa: BLE001 - one bad zone must not lose the others
             continue
@@ -322,7 +323,27 @@ def apply_france_extras(summary, session, out, previous_flares):
         except Exception:  # noqa: BLE001 - a fire without wind is still a fire
             pass
 
-    _build_zones(summary, session, out, wildfires)
+    # One departement's own crisis feeds, fetched before the zones are built because
+    # a surveyed perimeter suppresses the computed hull for the same ground. A side
+    # file: it covers Gironde alone, and a failure on somebody else's server must
+    # never reach the national danger map.
+    local = write_side_file(out, "gironde.json", lambda: gironde.normalize(
+        gironde.fetch(session), now=datetime.now(timezone.utc).isoformat()))
+    if local:
+        fire_cuts = sum(1 for c in local["closures"] if c["fire_related"])
+        burn = local["burn_area"]
+        print(f"wrote {out / 'gironde.json'} ({len(local['closures'])} closed roads, "
+              f"{fire_cuts} from fire, {len(local['evacuations'])} evacuated communes, "
+              f"{burn['area_km2'] if burn else 'no'} km2 burned)")
+    else:
+        print("WARNING: the Gironde feeds are unavailable; nothing claims the roads are open")
+
+    # Which zones already have somebody's surveyed perimeter. Derived from what was
+    # actually fetched rather than from a hardcoded list, so a failed fetch correctly
+    # falls back to a computed hull instead of leaving the ground unmapped.
+    surveyed = {"gironde"} if (local and local.get("burn_area")) else set()
+
+    _build_zones(summary, session, out, wildfires, surveyed)
 
     # Aircraft are matched against real wildfires only. An aircraft circling a
     # refinery flare is not fighting a fire.
@@ -443,21 +464,6 @@ def main():
                   f"across {passes} observed passes, newest {trail['generated_at']})")
         else:
             print("WARNING: the 7-day trail is unavailable; the previous file keeps serving")
-
-        # One departement's own crisis feeds: closed roads with a cause, evacuated
-        # communes, and the perimeter of ground that has burned. A side file because
-        # it covers Gironde alone and a failure on somebody else's server must never
-        # reach the national danger map.
-        local = write_side_file(out, "gironde.json", lambda: gironde.normalize(
-            gironde.fetch(session), now=datetime.now(timezone.utc).isoformat()))
-        if local:
-            fire_cuts = sum(1 for c in local["closures"] if c["fire_related"])
-            burn = local["burn_area"]
-            print(f"wrote {out / 'gironde.json'} ({len(local['closures'])} closed roads, "
-                  f"{fire_cuts} from fire, {len(local['evacuations'])} evacuated communes, "
-                  f"{burn['area_km2'] if burn else 'no'} km2 burned)")
-        else:
-            print("WARNING: the Gironde feeds are unavailable; nothing claims the roads are open")
 
     if country == "ca":
         history = write_history(out, lambda: cwfis_history.normalize(cwfis_history.fetch(session)))

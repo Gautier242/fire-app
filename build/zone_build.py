@@ -8,6 +8,8 @@ import json
 import math
 from pathlib import Path
 
+from build import fire_boundary
+
 EARTH_KM = 6371.0
 
 
@@ -69,8 +71,16 @@ def closures_in_zone(zone, closures):
     return near
 
 
-def write_zone(out, zone, fires, wind_rows, terrain, spread=None, closures=None):
-    """Write one zone's detail file and return the payload."""
+def write_zone(out, zone, fires, wind_rows, terrain, spread=None, closures=None,
+               official_perimeter=False):
+    """Write one zone's detail file and return the payload.
+
+    `official_perimeter` says somebody whose job it is has already mapped the
+    burned ground for this zone. When they have, no hull is computed: a surveyed
+    perimeter and a convex hull over satellite pixels answer the same question, and
+    showing both asks a reader to choose between an observation and a model.
+    """
+    near = fires_in_zone(zone, fires)
     payload = {
         "id": zone["id"],
         "label": zone.get("label") or zone["id"],
@@ -78,13 +88,17 @@ def write_zone(out, zone, fires, wind_rows, terrain, spread=None, closures=None)
         "lon": zone["lon"],
         "radius_km": zone.get("radius_km") or 50,
         "reason": zone.get("reason"),
-        "fires": fires_in_zone(zone, fires),
+        "fires": near,
         "wind": wind_rows or [],
         "terrain": terrain or None,
         "spread": spread or [],
         # Always present, even when empty: the frontend cannot tell "no cuts near
         # you" from "closures were never written" if the key can be missing.
         "closures": closures_in_zone(zone, closures),
+        # Where the detections say fire has reached, for zones nobody has surveyed.
+        # Always present, empty when a real perimeter exists or when the detections
+        # are too sparse to enclose anything honestly.
+        "boundaries": [] if official_perimeter else fire_boundary.boundaries(near),
     }
     _write(Path(out) / f"{zone['id']}.json", payload)
     return payload

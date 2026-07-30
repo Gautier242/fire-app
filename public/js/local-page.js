@@ -4,12 +4,13 @@
 // The five questions, in the order somebody in danger asks them: am I in danger,
 // where is it going, where must I not go, who is fighting it, what can I do.
 import { createMap } from './mapview.js';
-import { describeLocal } from './local.js';
+import { describeLocal, officialNear } from './local.js';
 import { describeFr } from './rail-fr.js';
 import { actionsFor, SKILLS } from './helping.js';
 import { LAYERS, availableDates } from './imagery.js';
 import { fetchViewport, MIN_ZOOM } from './overpass.js';
 import { haversineKm } from './geo.js';
+import { assessEgress, TOWARD } from './egress.js';
 import { hourToDate, observedPasses, pointsForPass, PAST_PALETTE } from './history.js';
 
 const LANG_KEY = 'fire-near-me.fr.lang';
@@ -79,6 +80,13 @@ const COPY = {
       evacuated: 'Commune évacuée', burnt: 'Déjà brûlé', wind: 'Vent',
     },
     imageryNote: 'Choisissez une image, puis la date.',
+    egressTitle: 'Routes vers la propagation modélisée',
+    egressSome: (n) => `${n} route(s) chargée(s) mènent vers la direction que le modèle donne au feu.`,
+    // "Not flagged" is not "safe". Said outright, because a reader looking at an
+    // unmarked road will otherwise supply that meaning themselves.
+    egressNone: 'Aucune route chargée ne mène vers la direction modélisée. Cela ne rend aucune route sûre : le modèle ne voit ni les fumées, ni les coupures, ni le trafic.',
+    egressCannot: 'Impossible d\'évaluer les routes ici.',
+    egressToward: 'Mène vers la propagation modélisée',
     forcesTitle: 'Moyens visibles',
     aircraft: (n) => `${n} aéronef(s) observé(s) à proximité.`,
     noAircraftDay: "Aucun aéronef observé dans les dernières minutes. Cela ne veut pas dire qu'il n'y en a pas.",
@@ -125,6 +133,11 @@ const COPY = {
       evacuated: 'Evacuated commune', burnt: 'Already burnt', wind: 'Wind',
     },
     imageryNote: 'Pick an image, then the date.',
+    egressTitle: 'Roads toward the modelled spread',
+    egressSome: (n) => `${n} loaded road(s) lead toward the direction the model gives the fire.`,
+    egressNone: 'No loaded road leads toward the modelled direction. That makes no road safe: the model sees neither smoke, nor cuts, nor traffic.',
+    egressCannot: 'The roads here cannot be assessed.',
+    egressToward: 'Leads toward the modelled spread',
     forcesTitle: 'Visible response',
     aircraft: (n) => `${n} aircraft observed nearby.`,
     noAircraftDay: 'No aircraft observed in the last few minutes. That does not mean there are none.',
@@ -210,7 +223,8 @@ function renderAvoid(closures) {
   // roads with a named cause against Bison Fute's zero for the same ground. It is
   // published for Gironde alone, so the note has to say which of three situations
   // a reader is in -- covered, outside the coverage, or unable to ask.
-  const local = official && official.available ? official : null;
+  const here = officialHere();
+  const local = here.covered ? here : null;
   const notes = [];
 
   if (local) {
@@ -234,10 +248,12 @@ function renderAvoid(closures) {
         : null;
       notes.push(c().burntArea(local.burn_area.area_km2, when));
     }
-  } else if (official === false) {
+  } else if (!here.available) {
     // Could not ask. This must never render as open roads.
     notes.push(c().avoidUnavailable);
-  } else if (zone && !inGironde()) {
+  } else {
+    // The feed answered and none of it is near this reader, so they are outside the
+    // one departement that publishes. Silence here is a coverage gap, not calm.
     notes.push(c().avoidOutside);
   }
 
@@ -251,11 +267,30 @@ function renderAvoid(closures) {
   $('avoid-note').textContent = notes.join(' ');
 }
 
-// The Gironde feeds cover departement 33 only, and a reader in Landes must not
-// read their silence as calm.
-function inGironde() {
-  return Boolean(official && (official.covers || []).includes('33')
-    && zone && zone.id === 'gironde');
+// Roads leading into the modelled spread, as a count and a caveat rather than a
+// verdict per road. The model is one fuel type for every zone and validated against
+// no real fire, so this can narrow a reader's attention and must never direct it.
+function renderEgress(egress) {
+  const block = $('egress-block');
+  if (!block) return;
+  $('egress-title').textContent = c().egressTitle;
+  const flagged = egress.cannotAssess
+    ? [] : egress.roads.filter((r) => r.assessment === TOWARD);
+  block.hidden = false;
+  $('egress-note').textContent = egress.cannotAssess
+    ? egress.reasonText || c().egressCannot
+    : (flagged.length ? c().egressSome(flagged.length) : c().egressNone);
+  // Both strings ship on every render: the caveat and the supersede line are not
+  // conditional on there being something to say.
+  $('egress-caveat').textContent = `${egress.caveat} ${egress.official}`;
+  const list = $('egress-list');
+  list.innerHTML = '';
+  for (const road of flagged.slice(0, 6)) {
+    if (!road.name) continue;
+    const li = document.createElement('li');
+    li.textContent = road.name;
+    list.append(li);
+  }
 }
 
 // What every colour on the map means. A reader cannot be expected to know whether
@@ -372,6 +407,12 @@ function render() {
   drawMap(d);
 }
 
+// The departement feed, narrowed to this reader. Never the raw feed: it covers one
+// departement and a reader elsewhere must not be shown its closures as theirs.
+function officialHere() {
+  return officialNear(official, at(), (zone && zone.radius_km) || 50);
+}
+
 function drawMap(d) {
   view.drawLocal({ ...zone, closures: nearbyClosures() }, {
     fire: lang === 'en' ? 'Heat detected by satellite' : 'Chaleur détectée par satellite',
@@ -386,7 +427,7 @@ function drawMap(d) {
     windArrow: lang === 'en' ? 'Wind' : 'Vent',
     gusts: lang === 'en' ? 'Gusts' : 'Rafales',
   });
-  view.drawOfficial(official || null, {
+  view.drawOfficial(officialHere(), {
     burnt: lang === 'en' ? 'Already burnt' : 'Déjà brûlé',
     evacuated: lang === 'en' ? 'Evacuated commune' : 'Commune évacuée',
     detour: lang === 'en' ? 'Official detour' : 'Déviation officielle',
@@ -542,6 +583,21 @@ async function loadDetail() {
   // A newer viewport already superseded this one; its result is the stale one.
   if (detailAbort !== mine) return;
   view.drawDetail(detail);
+
+  // Which of those roads lead into the modelled spread.
+  //
+  // Deliberately NOT a ranked list of every road. Downwind of a fire the model
+  // points at almost every direction, so a per-road verdict would render mostly
+  // red, and a map where everything is flagged tells a reader nothing. Only roads
+  // heading into the arc are marked, and the note says in as many words that an
+  // unmarked road is not thereby safe -- it is merely not flagged.
+  const egress = assessEgress({
+    point: at(), spread: (zone && zone.spread) || [], roads: detail.roads || [], lang,
+  });
+  view.drawEgress(egress.cannotAssess ? [] : egress.roads.filter(
+    (r) => r.assessment === TOWARD), { toward: c().egressToward });
+  renderEgress(egress);
+
   // fetchViewport returns empty both for genuinely empty ground and for a
   // refused request, and Overpass refuses often — it is a free volunteer
   // service. Saying nothing would let a rate-limit read as open country.
@@ -595,6 +651,11 @@ async function boot() {
 
   view = createMap('map', { center: [46.6, 2.5], zoom: 6 });
   view.setBase('plan_ign');
+  // Egress is off by default and opt-in through its chip. Measured downwind of the
+  // Gironde fires it flagged 110 of the 250 roads considered -- 44 per cent -- and a
+  // wall of amber over half the streets on screen tells a reader nothing while
+  // looking authoritative. The count and the caveat are in the rail either way, so
+  // nothing is hidden; only the overlay waits to be asked for.
   ['fires', 'spread', 'closures', 'detail', 'official', 'evacuated', 'burnt']
     .forEach((n) => view.toggle(n, true));
 

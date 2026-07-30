@@ -147,3 +147,38 @@ def test_a_zone_written_without_closures_still_has_the_key(tmp_path):
     payload = write_zone(tmp_path, zone, [], [], None)
 
     assert payload["closures"] == []
+
+
+def test_a_computed_boundary_fills_in_only_where_nobody_published_one(tmp_path):
+    """Official beats computed, and the payload must not carry both.
+
+    Gironde publishes a 405 km2 perimeter surveyed by the service fighting the fire.
+    A convex hull over FIRMS pixels exists to answer the same question where nobody
+    published anything, and showing both would ask a reader to choose between an
+    observation and a model.
+    """
+    zone = {"id": "gironde", "lat": 44.84, "lon": -0.58, "radius_km": 50}
+    fires = [{"id": "a", "lat": 44.85, "lon": -0.60, "industrial": False,
+              "in_country": True, "frp_total": 10.0,
+              "points": [[-0.60, 44.85, "2026-07-30T10:00:00Z"],
+                         [-0.61, 44.86, "2026-07-30T10:20:00Z"],
+                         [-0.59, 44.87, "2026-07-30T10:40:00Z"]]}]
+
+    with_official = write_zone(tmp_path, zone, fires, [], None,
+                               official_perimeter=True)
+    assert with_official["boundaries"] == [], (
+        "a surveyed perimeter must not be shadowed by a hull of the same fire")
+
+    without = write_zone(tmp_path, zone, fires, [], None, official_perimeter=False)
+    assert without["boundaries"], "somewhere with no official perimeter still needs one"
+    ring = without["boundaries"][0]
+    assert ring["validated"] is False, "a hull is derived and must say so"
+    assert ring["method"], "and must name the method that produced it"
+
+
+def test_the_boundaries_key_is_always_present(tmp_path):
+    zone = {"id": "landes", "lat": 44.0, "lon": -0.77, "radius_km": 50}
+
+    payload = write_zone(tmp_path, zone, [], [], None)
+
+    assert payload["boundaries"] == []
