@@ -345,3 +345,35 @@ test('an unusable filter is refused rather than quietly ignored', async () => {
     assert.equal(response.status, 422, `${query} was not refused`);
   }
 });
+
+test('a read that hit the cap says so instead of looking complete', async () => {
+  // Seeded directly: the point is a store holding more than one read can return.
+  const seed = [];
+  for (let i = 0; i <= LIMITS.readCap; i += 1) {
+    seed.push([`rec:seeded-${i}`, {
+      id: `seeded-${i}`, kind: 'offer', category: 'shelter', area: '33',
+      text: `offre ${i}`, contact: 'via la mairie', published: true,
+      createdAt: T0, publishedAt: T0, expiresAt: T0 + LIMITS.recordLifetimeMs,
+      provenance: { via: 'public-form', reviewedAt: T0 },
+    }]);
+  }
+  const c = ctx({ store: memoryStore(seed) });
+
+  const full = await body(await handle(get('/api/board'), c));
+  assert.equal(full.records.length, LIMITS.readCap);
+  assert.equal(full.truncated, true, 'a capped read presented itself as the whole board');
+
+  // A filter narrows the cap's output, so it too may be incomplete, and says so.
+  const filtered = await body(await handle(get('/api/board?area=40'), c));
+  assert.deepEqual(filtered.records, []);
+  assert.equal(filtered.truncated, true);
+});
+
+test('an uncapped read is not marked truncated', async () => {
+  const c = ctx();
+  await seedBoard(c);
+  const payload = await body(await handle(get('/api/board'), c));
+  assert.equal(payload.truncated, false);
+  const queue = await body(await handle(get('/api/queue', { token: TOKEN }), c));
+  assert.equal(queue.truncated, false);
+});

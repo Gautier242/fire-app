@@ -199,9 +199,15 @@ function refuse(posted) {
 // A record at or past its expiry is treated as absent by every read path.
 const live = (record, ctx) => record && record.expiresAt > ctx.now();
 
+// Bounded, and honest about the bound: one record past the cap is fetched purely
+// to find out whether there were more. A read that silently returned 200 of 900
+// would look exactly like a complete board, and on this site a partial answer
+// presented as a complete one is the failure mode that matters.
 async function readRecords(ctx) {
-  const all = await ctx.store.list(RECORD, LIMITS.readCap);
-  return all.filter((record) => live(record, ctx));
+  const scanned = await ctx.store.list(RECORD, LIMITS.readCap + 1);
+  const truncated = scanned.length > LIMITS.readCap;
+  const records = scanned.slice(0, LIMITS.readCap).filter((record) => live(record, ctx));
+  return { records, truncated };
 }
 
 // The public shape, built by naming the fields rather than by deleting the ones
@@ -257,18 +263,19 @@ async function board(request, ctx) {
   const { wanted, error } = filterFrom(new URL(request.url).searchParams);
   if (error) return json(422, { error });
 
-  const records = (await readRecords(ctx))
+  const { records, truncated } = await readRecords(ctx);
+  const shown = records
     .filter((r) => r.published)
     .filter((r) => Object.entries(wanted).every(([field, values]) => values.includes(r[field])))
     .map(publicView);
-  return json(200, { records });
+  return json(200, { records: shown, truncated, cap: LIMITS.readCap });
 }
 
 async function queue(request, ctx) {
   const refusal = moderatorRefusal(request, ctx);
   if (refusal) return refusal;
-  const records = (await readRecords(ctx)).filter((r) => !r.published);
-  return json(200, { records });
+  const { records, truncated } = await readRecords(ctx);
+  return json(200, { records: records.filter((r) => !r.published), truncated, cap: LIMITS.readCap });
 }
 
 // The human decision. Publishing is the only way onto the board; rejecting
