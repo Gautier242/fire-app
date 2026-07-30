@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   hourToDate, inCanada, observedPasses, passLabel, pointsForPass, trailOpacity,
+  PAST_PALETTE,
   windAt, windToward,
 } from '../public/js/history.js';
 
@@ -146,4 +147,27 @@ test('every pass is reachable when the caller asks for the whole window', () => 
   const all = pointsForPass(FR_HISTORY, passes, passes.length - 1, passes.length);
   assert.equal(all.length, FR_HISTORY.points.length, 'no detection is dropped');
   assert.deepEqual([...new Set(all.map((p) => p.age))].sort(), [0, 1]);
+});
+
+// The trail and the live-fire layer both drew from the same heat ramp, so turning
+// the trail on buried today's detections in a week of identical dots. A past
+// detection and a burning one must not be the same colour.
+test('the past-tense palette is far from the live-fire ramp', () => {
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const LIVE = ['#FFC061', '#FF7A3D', '#E23A1E'];   // HEAT in mapview.js
+  for (const past of PAST_PALETTE) {
+    for (const live of LIVE) {
+      const [a, b, cc] = rgb(past);
+      const [d, e, f] = rgb(live);
+      const distance = Math.hypot(a - d, b - e, cc - f);
+      assert.ok(distance > 90,
+        `${past} is only ${distance.toFixed(0)} from live-fire ${live}; a reader `
+        + 'cannot tell a week-old detection from one burning now');
+    }
+  }
+});
+
+test('the past palette still ranks intensity, so a band is not lost', () => {
+  assert.equal(PAST_PALETTE.length, 3, 'one colour per FRP band');
+  assert.equal(new Set(PAST_PALETTE).size, 3, 'the three bands stay distinguishable');
 });

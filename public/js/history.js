@@ -46,6 +46,20 @@ export function inCanada(lon, lat) {
 
 // Points for one pass, plus the two before it drawn faintly so direction of
 // growth is visible rather than inferred from memory.
+// Where fire has already been, in the past tense.
+//
+// A trail shown beside live detections cannot borrow the live-fire heat ramp: a
+// week of amber dots buries today's fire in its own history, which is the layer
+// actively hiding the thing a reader opened the page for. These are deliberately
+// cool and desaturated -- a burn scar reads as ground that has already burned,
+// not as ground that is burning. The three still rank by radiative power so no
+// intensity band is lost, and every one is more than 90 RGB units from every
+// colour in the live ramp, which a test asserts.
+//
+// Canada's scrubber keeps the heat ramp: it replays passes on their own, with no
+// live layer underneath to be confused with.
+export const PAST_PALETTE = ['#8C93A8', '#6B5B95', '#4A3B6B'];
+
 // How bright a pass of a given age draws, against the oldest age on screen.
 //
 // This was a three-element lookup, which is right for a scrubber stepping through

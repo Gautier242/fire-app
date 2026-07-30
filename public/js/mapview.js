@@ -535,7 +535,11 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
 
     // One satellite pass, with the passes before it faded so the direction of
     // growth is visible rather than remembered.
-    drawHistory(points) {
+    // `palette` decides whether the trail reads as heat or as history. Canada's
+    // scrubber replays passes with nothing live beneath them, so it keeps the heat
+    // ramp. France draws the trail underneath today's detections, where the heat
+    // ramp would bury them, so it passes PAST_PALETTE.
+    drawHistory(points, { palette = HEAT } = {}) {
       layers.history.clearLayers();
       // The oldest age present, so the ramp stretches over whatever is on screen:
       // three passes for Canada's scrubber, 41 for France's seven-day trail.
@@ -547,8 +551,8 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
       for (const p of points) {
         L.circleMarker([p.lat, p.lon], {
           radius: p.age === 0 ? 6 : 4,
-          color: HEAT[p.band] || HEAT[0],
-          fillColor: HEAT[p.band] || HEAT[0],
+          color: palette[p.band] || palette[0],
+          fillColor: palette[p.band] || palette[0],
           weight: 0,
           fillOpacity: (p.foreign ? 0.25 : 1) * trailOpacity(p.age, oldest),
           interactive: false,
