@@ -6,7 +6,8 @@ never fail the build.
 """
 import json
 
-from build.zone_build import fires_in_zone, write_zone, write_zone_index
+from build.zone_build import (fires_in_zone, water_in_zone, write_zone,
+                              write_zone_index)
 
 
 def test_a_zone_file_carries_only_what_is_near_it(tmp_path):
@@ -182,3 +183,82 @@ def test_the_boundaries_key_is_always_present(tmp_path):
     payload = write_zone(tmp_path, zone, [], [], None)
 
     assert payload["boundaries"] == []
+
+
+def test_only_water_points_inside_the_radius_survive_but_coverage_stays_whole():
+    """The register is national; the question is local.
+
+    74,632 points were shipped to the browser to render one sentence naming a
+    count. Only the points inside the radius can contribute to that count, so
+    only those travel. The coverage list is the exception and stays entire: the
+    sentence says which registers exist *anywhere*, which is how a reader learns
+    that silence here means nobody published, not that there is no water.
+    """
+    zone = {"id": "landes", "lat": 44.0, "lon": -0.77, "radius_km": 50}
+    layer = {
+        "points": [
+            {"id": "near", "lat": 44.05, "lon": -0.80, "dep": "40",
+             "tier": "register"},
+            {"id": "far", "lat": 43.60, "lon": 3.90, "dep": "34",
+             "tier": "register"},
+            {"id": "nowhere", "lat": None, "lon": None, "dep": "40",
+             "tier": "register"},
+        ],
+        "coverage": [{"dep": "34", "area": "Hérault", "scope": "departement",
+                      "count": 19296, "tier": "register"}],
+    }
+
+    block = water_in_zone(zone, layer)
+
+    assert [p["id"] for p in block["points"]] == ["near"]
+    assert block["coverage"] == layer["coverage"], (
+        "a reader must still be told which registers exist elsewhere")
+
+
+def test_an_unavailable_water_layer_becomes_none_never_an_empty_block():
+    """UNAVAILABLE IS NOT NONE, carried into the zone file.
+
+    waterStatement() reads a null layer as "coverage unknown -- do not read that
+    as the absence of water". An empty block would instead read as a surveyed
+    zero, which is the sentence that sends a crew somewhere with no water.
+    """
+    zone = {"id": "landes", "lat": 44.0, "lon": -0.77, "radius_km": 50}
+
+    assert water_in_zone(zone, None) is None
+
+
+def test_a_crowd_point_never_enters_the_register_block():
+    """REGISTER AND CROWD ARE NEVER SUMMED, enforced where the filtering happens.
+
+    A register is complete for its area, so absence inside one means something.
+    A volunteer-mapped dot must never inflate the number that reads as coverage.
+    """
+    zone = {"id": "gironde", "lat": 44.84, "lon": -0.58, "radius_km": 50}
+    layer = {
+        "points": [
+            {"id": "surveyed", "lat": 44.85, "lon": -0.60, "dep": "33",
+             "tier": "register"},
+            {"id": "mapped", "lat": 44.85, "lon": -0.60, "dep": "33",
+             "tier": "crowd"},
+        ],
+        "coverage": [],
+    }
+
+    block = water_in_zone(zone, layer, exclude_crowd=True)
+
+    assert [p["id"] for p in block["points"]] == ["surveyed"]
+
+
+def test_the_crowd_layer_keeps_its_own_availability_flag():
+    """crowdWaterStatement reads `available` to say "we could not ask".
+
+    Filtering the points must not drop the key that distinguishes an empty
+    answer from no answer at all.
+    """
+    zone = {"id": "gironde", "lat": 44.84, "lon": -0.58, "radius_km": 50}
+    layer = {"points": [], "coverage": [], "available": True, "truncated": False}
+
+    block = water_in_zone(zone, layer)
+
+    assert block["available"] is True
+    assert block["truncated"] is False

@@ -71,6 +71,40 @@ def closures_in_zone(zone, closures):
     return near
 
 
+def water_in_zone(zone, layer, exclude_crowd=False):
+    """One water layer narrowed to the zone radius, or None if it never loaded.
+
+    The registers are national and the question is local: 74,632 points were
+    being shipped to a browser that draws no water marker at all and renders one
+    sentence naming a count. Only the points inside the radius can contribute to
+    that count.
+
+    `coverage` is deliberately not narrowed. It is what lets the page say which
+    registers exist elsewhere, and so distinguishes "no water here" from "nobody
+    published a register here" -- the whole point of the layer.
+
+    None rather than an empty block when the fetch failed, because the frontend
+    reads null as "coverage unknown" and an empty block as a surveyed zero.
+    """
+    if not layer:
+        return None
+    radius = zone.get("radius_km") or 50
+    near = []
+    for point in layer.get("points") or []:
+        if exclude_crowd and point.get("tier") == "crowd":
+            continue
+        lat, lon = point.get("lat"), point.get("lon")
+        if lat is None or lon is None:
+            continue
+        if km_between(zone["lat"], zone["lon"], lat, lon) <= radius:
+            near.append(point)
+    # ponytail: no cap on `near`. Today's zones hold 0 and 5 register points; a
+    # 50 km zone over the densest register (Herault) would hold 14,697, or
+    # 136 KB gzipped in one zone file. test_budget guards the ceiling, so the
+    # day someone configures such a zone the build says so. Cap here then.
+    return {**layer, "points": near}
+
+
 def write_zone(out, zone, fires, wind_rows, terrain, spread=None, closures=None,
                official_perimeter=False):
     """Write one zone's detail file and return the payload.
