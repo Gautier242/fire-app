@@ -139,6 +139,10 @@ def project(incident, wind_rows, slope_deg, fuel, hours=3, fuel_model_name=None)
         "validated": False,
         "fuel_model": name,
         "hours": hours,
+        # The slope the arcs were computed on. Reported because the caller falls
+        # back to flat ground when terrain cannot be resolved, and a flat-ground
+        # wedge must not be mistaken for a measured one.
+        "slope_deg": slope_deg,
         "arcs": [],
     }
 

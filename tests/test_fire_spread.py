@@ -124,6 +124,29 @@ def test_a_projection_carries_its_own_uncertainty_and_provenance():
     assert out["arcs"][0]["bearing"] == 95
 
 
+def test_a_projection_reports_the_slope_it_used():
+    """Slope drives the arc length, so the payload must say which slope it had.
+
+    The builder falls back to flat ground when IGN terrain cannot be resolved.
+    Flat ground produces a visibly shorter wedge, and without the slope in the
+    payload that wedge is indistinguishable from a fire genuinely on a plain --
+    a missing input reading as a measured one.
+    """
+    incident = {"id": "firms-44.863,-0.880", "lat": 44.863, "lon": -0.880}
+    wind_rows = [{"time": "2026-07-29T14:00", "wind_kmh": 12.0, "gust_kmh": 30.0,
+                  "wind_dir": 270, "wind_toward": "E", "humidity_pct": 30}]
+
+    measured = project(incident, wind_rows, slope_deg=14.09,
+                       fuel=FUEL_MODELS["FM1"], hours=2)
+    flat = project(incident, wind_rows, slope_deg=0.0,
+                   fuel=FUEL_MODELS["FM1"], hours=2)
+
+    assert measured["slope_deg"] == 14.09
+    assert flat["slope_deg"] == 0.0
+    # The reason the distinction matters, stated as arithmetic.
+    assert measured["arcs"][0]["distance_m"] > flat["arcs"][0]["distance_m"]
+
+
 def test_a_projection_without_wind_yields_no_arcs_rather_than_a_still_fire():
     incident = {"id": "x", "lat": 44.0, "lon": -1.0}
     out = project(incident, [], slope_deg=5.0, fuel=FUEL_MODELS["FM1"], hours=2)
