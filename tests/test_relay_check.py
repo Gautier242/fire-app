@@ -76,3 +76,18 @@ def test_a_redirect_counts_as_reachable():
     out = relay_check.check(_entries()[:1], opener=lambda url: 301)
 
     assert out[0]["reachable"] is True
+
+
+def test_the_worst_case_check_time_stays_inside_a_build():
+    """Every check is a request that can hang until it times out.
+
+    The cap bounds how many, the timeout bounds each, and only the product bounds
+    the build. A directory of forty links that all hang must not add twenty
+    minutes to a run that also has a fire map to publish. Unknown is a safe state,
+    so waiting longer buys nothing a shorter timeout loses.
+    """
+    worst_case_seconds = relay_check.MAX_CHECKS * relay_check.TIMEOUT_SECONDS
+
+    assert worst_case_seconds <= 480, (
+        f"{relay_check.MAX_CHECKS} links x {relay_check.TIMEOUT_SECONDS}s "
+        f"= {worst_case_seconds}s of build time in the worst case")

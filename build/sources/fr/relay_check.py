@@ -18,11 +18,17 @@ the False state unreachable in production. And urllib announces itself as
 Python-urllib, which French government sites answer with 403 often enough that
 working prefecture pages would be labelled as not responding during a fire.
 """
-from build.http import TIMEOUT_SECONDS, make_session
+from build.http import make_session
 
 # Enough for a curated directory and a hard stop if the file ever grows. Every
 # check is a request to somebody else's server, so this is bounded by policy.
 MAX_CHECKS = 40
+
+# Deliberately shorter than the project-wide 30s. Only the product of the cap and
+# the timeout bounds the build, and forty hanging links at 30s would add twenty
+# minutes to a run that also has a fire map to publish. Unknown is a safe state, so
+# waiting longer buys nothing that giving up sooner loses.
+TIMEOUT_SECONDS = 10
 
 # Anything that answers at all is reachable. Redirects especially: government sites
 # move constantly, and a 301 is a working link.
