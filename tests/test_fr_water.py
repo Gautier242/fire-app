@@ -183,7 +183,36 @@ def test_every_point_is_tagged_as_a_water_point():
 
 def test_every_point_carries_the_whole_schema():
     for point in _points(PAYLOAD):
-        assert set(point) == {"id", "lat", "lon", "kind", "capacity_m3", "dep", "source"}
+        assert set(point) == {"id", "lat", "lon", "kind", "capacity_m3", "dep",
+                              "source", "tier"}
+
+
+# --- the tier ---------------------------------------------------------------
+
+def test_every_point_and_coverage_row_declares_its_tier():
+    """A register and a crowd source must never be summable into one number.
+
+    The failure mode of this layer is a firefighter concluding there is no water,
+    so a point from an SDIS register and a point somebody added to OpenStreetMap
+    cannot look alike or be counted together.
+    """
+    payload = {"sdis64": {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"id_sdis": "A1", "type_pei": "PI"},
+         "geometry": {"type": "Point", "coordinates": [-0.5, 43.3]}},
+    ]}}
+
+    out = water.normalize(payload)
+
+    assert out["points"][0]["tier"] == "register"
+    assert out["coverage"][0]["tier"] == "register"
+
+
+def test_nothing_this_module_produces_is_ever_anything_but_a_register():
+    # Every source here is a published register. If a crowd source is ever added
+    # to this module, it must not inherit the completeness claim by accident.
+    out = water.normalize(PAYLOAD)
+    assert {p["tier"] for p in out["points"]} == {"register"}
+    assert {c["tier"] for c in out["coverage"]} == {"register"}
 
 
 # --- the coverage statement ------------------------------------------------
@@ -192,7 +221,7 @@ def test_the_layer_states_which_departements_it_actually_knows_about():
     coverage = water.normalize(PAYLOAD)["coverage"]
     assert coverage, "a partial layer that cannot state its limits must not ship"
     for area in coverage:
-        assert set(area) == {"dep", "area", "scope", "count"}
+        assert set(area) == {"dep", "area", "scope", "count", "tier"}
         assert area["scope"] in ("departement", "local")
         assert area["count"] > 0
 

@@ -402,6 +402,11 @@ def normalize(payload, cap=MAX_POINTS):
                 "dep": _dep(record.get(source["insee"]) if source.get("insee") else None,
                             source["dep"]),
                 "source": "pei",
+                # A register is complete for its area, so absence inside it means
+                # something. That is exactly what a crowd source cannot claim, and
+                # the tier is how the two stay separable all the way to the map
+                # rather than being summed into one reassuring number.
+                "tier": "register",
             })
             # Saint-Avé publishes no identifier at all, and Grand Annecy writes
             # "NULL". Position within its own source is stable across builds.
@@ -409,5 +414,6 @@ def normalize(payload, cap=MAX_POINTS):
             found += 1
         if found:
             coverage.append({"dep": source["dep"], "area": source["area"],
-                             "scope": source["scope"], "count": found})
+                             "scope": source["scope"], "count": found,
+                             "tier": "register"})
     return {"points": points, "coverage": coverage}
