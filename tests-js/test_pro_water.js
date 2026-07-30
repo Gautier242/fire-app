@@ -139,3 +139,33 @@ test('the page never adds a register count to a crowd count', () => {
   assert.doesNotMatch(source, /register[\w.]*\s*\+\s*crowd|crowd[\w.]*\s*\+\s*register/i);
   assert.match(source, /crowd/, 'the page must know about the crowd tier');
 });
+
+test('both layers come from the zone file, not from the national registers', () => {
+  // The registers are 9.1 MB of coordinates and this page draws no water
+  // marker: every point existed to produce one sentence naming a count. The
+  // build now narrows them to the zone radius, so fetching the whole file here
+  // again would restore the download without changing a word on the page.
+  const source = readFileSync('public/js/pro-page.js', 'utf8');
+
+  assert.doesNotMatch(source, /data\/water\.json|data\/hydrants\.json/);
+});
+
+test('a zone written before the water keys existed reads as unknown', () => {
+  // Zone files are cached in readers' browsers. Across the deploy that moved
+  // the register into them, somebody holds a zone from before the key existed.
+  // Undefined has to reach the same statement a failed fetch does, because the
+  // alternative renders as a surveyed zero.
+  for (const lang of LANGS) {
+    const stale = { ...ZONE };
+
+    const register = waterStatement({ zone: stale, water: stale.water, lang });
+    const crowd = crowdWaterStatement({ zone: stale, hydrants: stale.hydrants, lang });
+
+    assert.equal(register.visible, null, 'unknown must not be a count');
+    assert.equal(crowd.visible, null, 'unknown must not be a count');
+    for (const { text } of [register, crowd]) {
+      assert.doesNotMatch(text, /\b0\b/, `unknown rendered as zero: ${text}`);
+      assert.match(text, lang === 'fr' ? /absence d’eau/ : /absence of water/);
+    }
+  }
+});

@@ -424,8 +424,6 @@ const LANG_KEY = 'fire-near-me.fr.lang';
 let lang = 'fr';
 let zone = null;
 let summary = null;
-let water = null;
-let hydrants = null;
 let crowdNote = null;
 let view = null;
 
@@ -484,7 +482,11 @@ function renderTriage({ rows, empty, emptyText }) {
 function renderResources() {
   const c = t(lang);
   $('resources-title').textContent = c.resourcesTitle;
-  $('water-note').textContent = waterStatement({ zone, water, lang }).text;
+  // Both layers ride in the zone file, already narrowed to this radius. Absent
+  // on a zone written before they existed, which reads as unknown rather than
+  // as a surveyed zero.
+  $('water-note').textContent = waterStatement(
+    { zone, water: zone && zone.water, lang }).text;
   // Its own line, immediately beneath the register line and never merged into
   // it. Created here rather than in the markup so the two counts cannot end up
   // in one element by an edit to the page.
@@ -492,7 +494,8 @@ function renderResources() {
     crowdNote = el('p', 'crowd');
     $('water-note').insertAdjacentElement('afterend', crowdNote);
   }
-  crowdNote.textContent = crowdWaterStatement({ zone, hydrants, lang }).text;
+  crowdNote.textContent = crowdWaterStatement(
+    { zone, hydrants: zone && zone.hydrants, lang }).text;
   // Unconditional, and rendered before the aircraft line so an aircraft count can
   // never be the last word on who is on the ground.
   $('ground-note').textContent = groundStatement({ lang });
@@ -589,17 +592,6 @@ async function boot() {
     loadJSON('data/summary.json').catch(() => null),
   ]);
   summary = loaded;
-
-  // 5.8 MB of water points, so it never blocks the numbers a responder came for.
-  // Until it lands the water line reads as unknown, not as no water.
-  loadJSON('data/water.json').then((w) => { water = w; if (zone) renderResources(); })
-    .catch(() => { water = null; });
-
-  // Loaded beside the registers, never into them. A failure here leaves the
-  // register line untouched and says the crowd layer is unavailable, which is
-  // not the same statement as no water.
-  loadJSON('data/hydrants.json').then((h) => { hydrants = h; if (zone) renderResources(); })
-    .catch(() => { hydrants = null; });
 
   const select = $('zone-select');
   for (const z of index.zones || []) {
