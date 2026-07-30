@@ -377,3 +377,42 @@ test('an uncapped read is not marked truncated', async () => {
   const queue = await body(await handle(get('/api/queue', { token: TOKEN }), c));
   assert.equal(queue.truncated, false);
 });
+
+// A store that answers reads but refuses writes, which is how a quota-exhausted
+// or partly-broken KV namespace actually behaves.
+function writeRefusingStore(seed = []) {
+  const store = memoryStore(seed);
+  return { ...store, put: async () => { throw new Error('KV write failed'); } };
+}
+
+test('a store that cannot write answers 503 and stores nothing', async () => {
+  const c = ctx({ store: writeRefusingStore() });
+  const response = await handle(post('/api/submit', OFFER), c);
+  assert.equal(response.status, 503);
+  assert.equal(c.store._size(), 0);
+});
+
+test('a failed publish leaves the record exactly as it was', async () => {
+  const waiting = {
+    id: 'waiting-1', kind: 'offer', category: 'shelter', area: '33',
+    text: 'Deux lits libres.', contact: 'via la mairie', published: false,
+    createdAt: T0, expiresAt: T0 + LIMITS.recordLifetimeMs, provenance: { via: 'public-form' },
+  };
+  const c = ctx({ store: writeRefusingStore([['rec:waiting-1', waiting]]) });
+
+  const response = await handle(post('/api/review', { id: 'waiting-1', action: 'publish' }, { token: TOKEN }), c);
+  assert.equal(response.status, 503);
+
+  // The previous good state survived: still unpublished, still off the board.
+  assert.deepEqual(await c.store.get('rec:waiting-1'), waiting);
+  assert.deepEqual((await body(await handle(get('/api/board'), c))).records, []);
+});
+
+test('a store that cannot read answers 503 rather than an empty board', async () => {
+  // An empty board and a broken board must never look the same to a caller.
+  const c = ctx({ store: { ...memoryStore(), list: async () => { throw new Error('KV read failed'); } } });
+  const response = await handle(get('/api/board'), c);
+  assert.equal(response.status, 503);
+  const payload = await body(response);
+  assert.equal(payload.records, undefined);
+});
