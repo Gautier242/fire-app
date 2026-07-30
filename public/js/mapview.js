@@ -164,6 +164,18 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
   let imageryOverlay = null;
   let scarOverlay = null;
 
+  // Where a fire is now outranks everything else on the map. Area washes -- an
+  // evacuated commune, burnt ground -- are large and semi-opaque, so without this
+  // they bury the detections and the trail underneath them, and the layer a reader
+  // opened the page for disappears behind its own context.
+  const LIVE_ON_TOP = ['history', 'spread', 'fires', 'orders', 'alerts'];
+  function raiseLive() {
+    for (const name of LIVE_ON_TOP) {
+      const layer = layers[name];
+      if (layer && map.hasLayer(layer) && layer.bringToFront) layer.bringToFront();
+    }
+  }
+
   return {
     map,
 
@@ -266,6 +278,7 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
           + `<br><small>${local.source || ''}</small>`)
           .addTo(layers.official);
       }
+      raiseLive();
     },
 
     // A past season's burn scars. Separate from setImagery because it answers a
@@ -660,6 +673,7 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
           renderer,
         }).addTo(layers.history);
       }
+      raiseLive();
     },
 
     setYou(point, zoom = 8) {
