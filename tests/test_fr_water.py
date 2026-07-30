@@ -18,8 +18,22 @@ GPKG = {"herault_sdis": base64.b64decode(FIXTURE["herault_sdis_gpkg_b64"]),
 AGDE_L93 = (723894.42, 6262032.84)
 AGDE_WGS84 = (3.29510, 43.45699)
 
+# Six real rows of the Seine-Maritime register, as data.gouv's own parse of it
+# serves them. It publishes no lon/lat at all: only Lambert-93 metres, so the
+# whole file is the CRS trap. One row carries an empty commune code and one an
+# undocumented "--" type, because both occur in the real 20,694.
+SDIS76_CSV = """\
+__id,id_interne_pei,label,ref_terr,domanialite,commune,code_insee,quartier,adresse,prec_adres,precis_don,type_rn,type_rd,disponible,date_disp_chgt,date_extraction_donnees,x_l93,y_l93
+1,4486,1,1,public,Allouville-Bellefosse,76001,.,ROUTE DE LOUVETOT,,5,BI,121,t,,2024-11-22,532024.06,6946547.5
+2,4487,2,2,public,Allouville-Bellefosse,76001,.,RUE DU DOCTEUR PATENOTRE,,5,CI,321,t,,2024-11-22,531853.56,6946665
+4,4489,4,4,public,Allouville-Bellefosse,76001,.,ROUTE DE LILLEBONNE,RUE DE BREMARE,5,PI,111,t,,2024-11-22,528630.2,6945003.5
+13,4501,16,16,public,Allouville-Bellefosse,76001,.,RUE DU PERE CERCEAU,ANGLE RUE RAYMOND POULIDOR,5,PA,223,t,,2024-11-22,532273.44,6946376
+102,22376,47P,47,privé,Amfreville-la-Mi-Voie,,.,La Mivoie,cale CEDGP MULTISOL,2,PA,225,t,,2024-11-22,563442.5,6924003.5
+986,5027,5P,5,privé,Beautot,76066,.,PEG,Au bout de la ZI des Vikings,5,--,999,t,,2024-11-22,559056.5,6950764.5
+"""
+
 # What a build actually normalizes: every source keyed as fetch() keys it.
-PAYLOAD = dict(FIXTURE, herault_sdis=GPKG["herault_sdis"])
+PAYLOAD = dict(FIXTURE, herault_sdis=GPKG["herault_sdis"], sdis76=SDIS76_CSV)
 
 LON_MIN, LON_MAX = -5.5, 10.0
 LAT_MIN, LAT_MAX = 41.0, 51.5
@@ -134,6 +148,10 @@ def test_flow_rate_is_never_mistaken_for_capacity():
     ("328-0004", "naturel"),    # "Puisard"
     ("74011-0002", "citerne"),  # "CI"
     ("73008-0001", "citerne"),  # "BS", bache souple
+    ("4486", "borne"),          # "BI", Seine-Maritime
+    ("4487", "citerne"),        # "CI", Seine-Maritime
+    ("4489", "borne"),          # "PI", Seine-Maritime
+    ("4501", "naturel"),        # "PA", Seine-Maritime
 ])
 def test_the_real_published_vocabulary_maps_onto_our_kinds(point_id, kind):
     assert _by_id(PAYLOAD, point_id)["kind"] == kind
@@ -345,6 +363,47 @@ def test_every_source_declares_where_it_applies():
     for source in water.SOURCES:
         assert source["scope"] in ("departement", "local")
         assert len(source["dep"]) == 2 and source["area"]
+
+
+# --- Seine-Maritime, a register published only in Lambert-93 ---------------
+
+def test_a_source_with_only_lambert93_columns_is_reprojected():
+    # 532024.06 east, 6946547.5 north is Allouville-Bellefosse. Read as degrees
+    # it is nowhere on Earth; silently dropped it is a département of no water.
+    point = _by_id(PAYLOAD, "4486")
+    assert point["lon"] == pytest.approx(0.67738, abs=1e-4)
+    assert point["lat"] == pytest.approx(49.59590, abs=1e-4)
+
+
+def test_the_seine_maritime_register_yields_every_one_of_its_rows():
+    # A register that parses to nothing is the one failure this layer cannot
+    # have: it reads as "no water here" rather than as "we could not read it".
+    points = _points({"sdis76": SDIS76_CSV})
+    assert len(points) == 6
+    assert all(p["dep"] == "76" for p in points)
+
+
+def test_a_seine_maritime_row_with_no_commune_code_keeps_the_departement():
+    assert _by_id(PAYLOAD, "22376")["dep"] == "76"
+
+
+def test_an_undocumented_seine_maritime_type_is_none_not_a_guessed_borne():
+    assert _by_id(PAYLOAD, "5027")["kind"] is None      # type_rn "--"
+
+
+def test_the_seine_maritime_register_is_declared_as_a_whole_departement():
+    coverage, = water.normalize({"sdis76": SDIS76_CSV})["coverage"]
+    assert (coverage["dep"], coverage["scope"], coverage["tier"]) == (
+        "76", "departement", "register")
+
+
+def test_seine_maritime_is_read_from_data_gouvs_mirror_not_the_dead_host():
+    # geo.sdis76.fr resolves and drops every connection on 80 and 443; measured
+    # 2026-07-29 and again 2026-07-30. data.gouv's own parse of the same
+    # resource answers, so the register is fetched from there.
+    source, = [s for s in water.SOURCES if s["key"] == "sdis76"]
+    assert "geo.sdis76.fr" not in source["url"]
+    assert source["url"].startswith("https://tabular-api.data.gouv.fr/")
 
 
 # --- GeoPackage and the inverse Lambert-93 ---------------------------------

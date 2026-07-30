@@ -4,9 +4,13 @@ This is the one layer aimed at firefighters rather than residents, and it is the
 most fragmented data in the app. DECI is a mayoral competence under a règlement
 départemental, so each SDIS owns its own register by law: there is no national
 authority and therefore no national dataset to wait for. A survey of data.gouv on
-2026-07-29 found 21 candidate datasets, of which ten are stdlib-parseable and
-reachable — 53,937 points, three complete départements, seven local patches. That
-is roughly 7% of France's estimated ~800,000 PEI.
+2026-07-29 found 21 candidate datasets, of which eleven are stdlib-parseable and
+reachable — 74,632 points on 2026-07-30, four complete départements, seven local
+patches. That is roughly 9% of France's estimated ~800,000 PEI.
+
+Every point and every coverage row declares `tier: "register"`. A register is
+complete for the area it covers, so absence inside one carries information; a
+crowd source cannot make that claim, and the two must never be added together.
 
 A firefighter who sees no water point must not conclude there is none, so
 normalize() returns a coverage statement alongside the points and the frontend is
@@ -108,6 +112,18 @@ SOURCES = (
 
     # LAT_PEI holds the longitude and LONG_PEI the latitude. The columns are
     # mapped as published rather than trusted by name.
+    # 20,694 points, the whole département. The SDIS publishes it on data.gouv
+    # but hosts it on geo.sdis76.fr, which resolves to 194.53.7.100 and drops
+    # every connection on 80 and 443 — measured 2026-07-29 and again 2026-07-30,
+    # while data.gouv's own crawler reached it in April. Rather than lose a
+    # complete register to one firewall, it is read from data.gouv's parse of
+    # that same CSV resource, which serves all 20,694 rows in one request.
+    {"key": "sdis76", "dep": "76", "area": "Seine-Maritime", "scope": "departement",
+     "format": "csv", "x": "x_l93", "y": "y_l93", "id": "id_interne_pei",
+     "kind": "type_rn", "insee": "code_insee",
+     "url": "https://tabular-api.data.gouv.fr/api/resources"
+            "/b685a7ca-8e96-40df-9a69-c1d6c8e37916/data/csv/"},
+
     {"key": "sixt", "dep": "35", "area": "Sixt-sur-Aff", "scope": "local",
      "format": "csv", "lat": "LONG_PEI", "lon": "LAT_PEI", "delimiter": ";",
      "id": "ID_PEI", "kind": "TYPE_PEI", "insee": "COLL_INSEE",
@@ -115,12 +131,20 @@ SOURCES = (
             "/20191127-131445/sixtsuraff-pei-2019.csv"},
 )
 
-# Two complete départements are one reachable host away: DECI - Calvados - SDIS14
-# (https://data.calvados.fr/sdis/deci_pei.geojson) and Points d'Eau Incendie de la
-# Seine-Maritime (https://geo.sdis76.fr/documents/opendata/deci_sdis76__8850c577-
-# 4a99-45f4-b91b-e3eab62892f1.csv). Both resolve in DNS and refuse connections;
-# neither is wired in, because their field names cannot be read from a dead host
-# and guessing them would invent coordinates. Add them once one answers.
+# Two more registers were looked at on 2026-07-30 and are not here:
+#
+#   * DECI - Calvados - SDIS14 (https://data.calvados.fr/sdis/deci_pei.geojson)
+#     still resolves in DNS and drops the connection, as on 2026-07-29. Nothing
+#     mirrors it, so its field names cannot be read and guessing them would
+#     invent coordinates. Add it once the host answers, or once data.gouv parses
+#     a tabular copy the way it did for Seine-Maritime.
+#   * PEI des Alpes-de-Haute-Provence, SDIS 04. data.gouv lists it, but its only
+#     resource is an OGC *web map* service — a Lizmap instance at
+#     https://www.opensis.fr/04/ whose WMS answers and whose WFS returns 403
+#     "Accès interdit au service". A WMS serves rendered pixels: no identifiers,
+#     no types, no coordinates. There is nothing to parse, and the portal's own
+#     landing page answers HTTP 200 for every query string, so a naive fetch of
+#     it would look like a success and normalize to an empty département.
 
 # Publishers write "NULL" as a string surprisingly often.
 BLANK = {"", "null", "none", "nan", "-"}
@@ -353,7 +377,15 @@ def _csv_rows(source, body):
     reader = csv.DictReader(io.StringIO(body if isinstance(body, str) else ""),
                             delimiter=source.get("delimiter", ","))
     for row in reader:
-        if source.get("latlon"):
+        if source.get("x"):
+            # Seine-Maritime publishes no lon/lat at all, only Lambert-93 metres.
+            # Reading them as degrees is the Gulf of Guinea; dropping them is a
+            # département of no water. They are reprojected, and the France box
+            # in normalize() is still the backstop.
+            easting, northing = _number(row.get(source["x"])), _number(row.get(source["y"]))
+            pair = ((None, None) if easting is None or northing is None
+                    else lambert93_to_wgs84(easting, northing))
+        elif source.get("latlon"):
             # La Rochelle packs "lat, lon" into one quoted column.
             parts = _text(row.get(source["latlon"])).split(",")
             pair = ((_number(parts[1]), _number(parts[0])) if len(parts) == 2
