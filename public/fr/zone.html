@@ -134,6 +134,15 @@
         <button class="chip" data-layer="detail" aria-pressed="true">
           <i class="sw sat"></i><span>Bâtiments et rues</span>
         </button>
+        <button class="chip" data-layer="evacuated" aria-pressed="true" id="chip-evacuated">
+          <i class="sw order"></i><span>Communes évacuées</span>
+        </button>
+        <button class="chip" data-layer="burnt" aria-pressed="true" id="chip-burnt">
+          <i class="sw hist"></i><span>Déjà brûlé</span>
+        </button>
+        <button class="chip" data-layer="history" aria-pressed="false" id="chip-trail">
+          <i class="sw hist"></i><span>Chaleur sur 7 jours</span>
+        </button>
 
         <span class="chip hint" id="detail-hint" hidden></span>
 
@@ -141,6 +150,7 @@
           <select id="imagery" aria-label="Image satellite">
             <option value="">Aucune image</option>
           </select>
+          <span class="pick-note" id="imagery-note"></span>
         </div>
 
         <div class="seg basemap" id="basemap" role="group" aria-label="Fond de carte">
@@ -157,6 +167,22 @@
         <input type="range" id="scrub" min="0" max="21" value="0" step="1">
         <div class="scrub-foot"><span id="scrub-note"></span></div>
       </div>
+
+      <div class="scrubber days" id="day-scrubber" hidden>
+        <div class="scrub-head">
+          <span id="day-label">Jour</span><b id="day-date"></b>
+        </div>
+        <input type="range" id="day" min="0" max="6" value="6" step="1">
+        <div class="scrub-foot"><span id="day-note"></span></div>
+      </div>
+
+      <!-- What the colours mean. Without this a reader has to guess whether an
+           orange dot is a fire now or a fire on Tuesday, which is the difference
+           between leaving and staying. -->
+      <details class="legend" id="legend">
+        <summary id="legend-title">Légende</summary>
+        <ul id="legend-list"></ul>
+      </details>
     </div>
 
   </div>

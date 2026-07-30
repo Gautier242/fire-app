@@ -10,6 +10,7 @@ import { actionsFor, SKILLS } from './helping.js';
 import { LAYERS, availableDates } from './imagery.js';
 import { fetchViewport, MIN_ZOOM } from './overpass.js';
 import { haversineKm } from './geo.js';
+import { hourToDate, observedPasses, pointsForPass, PAST_PALETTE } from './history.js';
 
 const LANG_KEY = 'fire-near-me.fr.lang';
 const SKILLS_KEY = 'fire-near-me.fr.skills';
@@ -24,6 +25,11 @@ let point = null;
 let view = null;
 let dates = [];
 let detailAbort = null;
+// The departement's own crisis feeds. null = not fetched, false = fetch failed.
+// Never collapsed into an empty object: empty means the departement says nothing is
+// shut, failed means we could not ask, and those must not render the same.
+let official = null;
+let trail = null;
 
 function load(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -51,6 +57,27 @@ const COPY = {
     avoidTitle: 'Où ne pas aller',
     avoidPath: "N'entrez pas dans la zone hachurée : c'est le trajet que le modèle donne au feu.",
     avoidNone: 'Aucune route coupée signalée dans cette zone. Bison Futé ne voit que le réseau national.',
+    avoidOfficial: (n, fire) => `${n} route(s) coupée(s) publiée(s) par le Département de la Gironde`
+      + (fire ? `, dont ${fire} à cause de l'incendie.` : '.'),
+    avoidUnavailable: 'Routes coupées du Département indisponibles. Cela ne veut pas dire que les routes sont ouvertes.',
+    avoidOutside: 'Le Département de la Gironde publie ses routes coupées ; les autres départements non. Une carte vide ici ne veut pas dire des routes ouvertes.',
+    evacTitle: 'Communes évacuées',
+    evacList: (n) => `${n} commune(s) évacuée(s), en tout ou partie.`,
+    evacSource: 'Source : Département de la Gironde. Les ordres d\'évacuation partent aussi par FR-Alert, directement sur votre téléphone.',
+    evacUnavailable: 'Liste des communes évacuées indisponible. Cela ne veut pas dire qu\'il n\'y a aucun ordre.',
+    burntArea: (km2) => `${km2} km² déjà brûlés (relevé du Département).`,
+    trailChip: 'Chaleur sur 7 jours',
+    trailUnavailable: 'Historique 7 jours indisponible.',
+    dayLabel: 'Jour', dayAll: '7 jours',
+    dayNote: 'Chaleur détectée par satellite. Ce n\'est pas un périmètre : les nuages masquent la détection.',
+    legendTitle: 'Légende',
+    legend: {
+      fire: 'Feu détecté maintenant', trail: 'Chaleur les jours précédents',
+      spread: 'Propagation modélisée (non validée)', closure: 'Route coupée (incendie)',
+      closureOther: 'Route coupée (autre cause)', detour: 'Déviation officielle',
+      evacuated: 'Commune évacuée', burnt: 'Déjà brûlé', wind: 'Vent',
+    },
+    imageryNote: 'Choisissez une image, puis la date.',
     forcesTitle: 'Moyens visibles',
     aircraft: (n) => `${n} aéronef(s) observé(s) à proximité.`,
     noAircraftDay: "Aucun aéronef observé dans les dernières minutes. Cela ne veut pas dire qu'il n'y en a pas.",
@@ -75,6 +102,27 @@ const COPY = {
     avoidTitle: 'Where not to go',
     avoidPath: 'Do not enter the hatched area: that is the path the model gives the fire.',
     avoidNone: 'No closed roads reported in this zone. Bison Futé only sees the national network.',
+    avoidOfficial: (n, fire) => `${n} closed road(s) published by the Gironde département`
+      + (fire ? `, ${fire} of them because of the fire.` : '.'),
+    avoidUnavailable: 'Département road closures unavailable. That does not mean the roads are open.',
+    avoidOutside: 'The Gironde département publishes its closed roads; other départements do not. An empty map here does not mean open roads.',
+    evacTitle: 'Evacuated communes',
+    evacList: (n) => `${n} commune(s) evacuated, wholly or partly.`,
+    evacSource: 'Source: Gironde département. Evacuation orders also go out over FR-Alert, straight to your phone.',
+    evacUnavailable: 'The evacuated commune list is unavailable. That does not mean there is no order.',
+    burntArea: (km2) => `${km2} km² already burnt (département survey).`,
+    trailChip: 'Heat over 7 days',
+    trailUnavailable: 'The 7-day history is unavailable.',
+    dayLabel: 'Day', dayAll: '7 days',
+    dayNote: 'Heat detected by satellite. Not a perimeter: cloud blocks detection.',
+    legendTitle: 'Legend',
+    legend: {
+      fire: 'Fire detected now', trail: 'Heat on earlier days',
+      spread: 'Modelled spread (not validated)', closure: 'Closed road (fire)',
+      closureOther: 'Closed road (other cause)', detour: 'Official detour',
+      evacuated: 'Evacuated commune', burnt: 'Already burnt', wind: 'Wind',
+    },
+    imageryNote: 'Pick an image, then the date.',
     forcesTitle: 'Visible response',
     aircraft: (n) => `${n} aircraft observed nearby.`,
     noAircraftDay: 'No aircraft observed in the last few minutes. That does not mean there are none.',
@@ -153,12 +201,77 @@ function renderSpread(spread) {
 // on the national network only, so its silence is not an all-clear.
 function renderAvoid(closures) {
   $('avoid-title').textContent = c().avoidTitle;
-  $('avoid-note').textContent = closures.length ? c().avoidPath : c().avoidNone;
   const list = $('avoid-list');
   list.innerHTML = '';
+
+  // The departement's own list, where it exists, is the real answer: 236 closed
+  // roads with a named cause against Bison Fute's zero for the same ground. It is
+  // published for Gironde alone, so the note has to say which of three situations
+  // a reader is in -- covered, outside the coverage, or unable to ask.
+  const local = official && official.available ? official : null;
+  const notes = [];
+
+  if (local) {
+    const fire = local.closures.filter((x) => x.fire_related).length;
+    if (local.closures.length) {
+      notes.push(c().avoidOfficial(local.closures.length, fire));
+      for (const cut of local.closures.filter((x) => x.fire_related).slice(0, 6)) {
+        const li = document.createElement('li');
+        li.textContent = `${cut.road || '?'} — ${cut.kind || ''}`.trim();
+        list.append(li);
+      }
+    }
+    if (local.evacuations.length) notes.push(c().evacList(local.evacuations.length));
+    if (local.burn_area && local.burn_area.area_km2) {
+      notes.push(c().burntArea(local.burn_area.area_km2));
+    }
+  } else if (official === false) {
+    // Could not ask. This must never render as open roads.
+    notes.push(c().avoidUnavailable);
+  } else if (zone && !inGironde()) {
+    notes.push(c().avoidOutside);
+  }
+
+  // Bison Fute's national-network points still apply everywhere.
   for (const closure of closures.slice(0, 8)) {
     const li = document.createElement('li');
     li.textContent = `${closure.road} — ${closure.place}`;
+    list.append(li);
+  }
+  if (!notes.length) notes.push(closures.length ? c().avoidPath : c().avoidNone);
+  $('avoid-note').textContent = notes.join(' ');
+}
+
+// The Gironde feeds cover departement 33 only, and a reader in Landes must not
+// read their silence as calm.
+function inGironde() {
+  return Boolean(official && (official.covers || []).includes('33')
+    && zone && zone.id === 'gironde');
+}
+
+// What every colour on the map means. A reader cannot be expected to know whether
+// an orange dot is a fire now or a fire on Tuesday, and that difference is the
+// whole point of the layer.
+function renderLegend() {
+  $('legend-title').textContent = c().legendTitle;
+  const rows = [
+    ['#E23A1E', c().legend.fire],
+    [PAST_PALETTE[1], c().legend.trail],
+    ['#E8A33D', c().legend.spread, true],
+    ['#E4344F', c().legend.closure],
+    ['#7A8894', c().legend.closureOther],
+    ['#2E7D5B', c().legend.detour],
+    ['#5B4636', c().legend.burnt],
+    ['#1B6C8C', c().legend.wind],
+  ];
+  const list = $('legend-list');
+  list.innerHTML = '';
+  for (const [colour, text, dashed] of rows) {
+    const li = document.createElement('li');
+    const swatch = document.createElement('i');
+    swatch.className = dashed ? 'lg dashed' : 'lg';
+    swatch.style.setProperty('--lg', colour);
+    li.append(swatch, document.createTextNode(text));
     list.append(li);
   }
 }
@@ -261,7 +374,87 @@ function drawMap(d) {
     // The same caveat the rail carries. A wedge clicked on the map must not be
     // the one place the model's status goes missing.
     spreadCaveat: d.spread ? d.spread.caveat : '',
+    windArrow: lang === 'en' ? 'Wind' : 'Vent',
+    gusts: lang === 'en' ? 'Gusts' : 'Rafales',
   });
+  view.drawOfficial(official || null, {
+    burnt: lang === 'en' ? 'Already burnt' : 'Déjà brûlé',
+    evacuated: lang === 'en' ? 'Evacuated commune' : 'Commune évacuée',
+    detour: lang === 'en' ? 'Official detour' : 'Déviation officielle',
+  });
+  renderLegend();
+}
+
+/* ---------------- the seven-day trail ---------------- */
+
+// Which day of the trail is shown, and the slider that steps through it.
+//
+// The chip loads 7 days at once; the slider narrows it to one day so a reader can
+// watch the fire move rather than see a week of dots at once. Both are needed: the
+// week answers "where has it been", a single day answers "where was it yesterday".
+function trailDays() {
+  if (!trail || !trail.points) return [];
+  const passes = observedPasses(trail);
+  // Group passes by calendar day, oldest first.
+  const byDay = new Map();
+  for (const hour of passes) {
+    const day = Math.floor(hour / 24);
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(hour);
+  }
+  return [...byDay.entries()].sort((a, b) => a[0] - b[0]);
+}
+
+function applyTrail() {
+  if (!trail || !trail.points) return;
+  const days = trailDays();
+  const slider = $('day');
+  const index = Number(slider.value);
+  const passes = observedPasses(trail);
+
+  let shown;
+  if (index >= days.length) {
+    // The far right of the slider is the whole week.
+    shown = pointsForPass(trail, passes, passes.length - 1, passes.length);
+    $('day-date').textContent = c().dayAll;
+  } else {
+    const [, hours] = days[index];
+    const newest = hours[hours.length - 1];
+    const at = passes.indexOf(newest);
+    shown = pointsForPass(trail, passes, at, hours.length - 1);
+    const when = hourToDate(trail, newest);
+    $('day-date').textContent = when
+      ? when.toLocaleDateString(lang === 'en' ? 'en-GB' : 'fr-FR',
+        { day: 'numeric', month: 'short' })
+      : '';
+  }
+  view.drawHistory(shown, { palette: PAST_PALETTE });
+}
+
+async function showTrail(on) {
+  const chip = $('chip-trail');
+  if (!on) {
+    view.drawHistory([]);
+    view.toggle('history', false);
+    $('day-scrubber').hidden = true;
+    return;
+  }
+  if (trail === null) trail = await loadJSON('data/history.json').catch(() => false);
+  if (!trail || !trail.points || !trail.points.length) {
+    // A failed fetch must not leave an empty layer looking like an empty week.
+    chip.setAttribute('aria-pressed', 'false');
+    chip.querySelector('span').textContent = c().trailUnavailable;
+    return;
+  }
+  const days = trailDays();
+  const slider = $('day');
+  slider.max = String(days.length);
+  slider.value = String(days.length);
+  $('day-scrubber').hidden = false;
+  $('day-label').textContent = c().dayLabel;
+  $('day-note').textContent = c().dayNote;
+  view.toggle('history', true);
+  applyTrail();
 }
 
 /* ---------------- imagery ---------------- */
@@ -274,10 +467,18 @@ function currentLayer() {
   return LAYERS.find((l) => l.id === $('imagery').value) || null;
 }
 
+function showImageryPurpose() {
+  const layer = currentLayer();
+  $('imagery-note').textContent = layer
+    ? layer.purpose[lang === 'en' ? 'en' : 'fr']
+    : c().imageryNote;
+}
+
 function applyImagery() {
   const layer = currentLayer();
   const date = dates[Number($('scrub').value)] || dates[0];
   $('scrubber').hidden = !(layer && layer.dated);
+  showImageryPurpose();
   $('scrub-date').textContent = date;
   view.setImagery(layer, date);
 }
@@ -294,6 +495,9 @@ function fillImagery() {
     const option = document.createElement('option');
     option.value = layer.id;
     option.textContent = layer.label[lang === 'en' ? 'en' : 'fr'];
+    // Why a reader would pick this one. The label states the sensor and the
+    // resolution, which is accurate and useless to somebody deciding.
+    option.title = layer.purpose[lang === 'en' ? 'en' : 'fr'];
     select.append(option);
   }
   select.value = chosen;
@@ -346,6 +550,12 @@ function applyLanguage() {
   $('skills-summary').textContent = c().skillsSummary;
   $('scrub-label').textContent = c().scrubLabel;
   $('scrub-note').textContent = c().scrubNote;
+  $('day-label').textContent = c().dayLabel;
+  $('day-note').textContent = c().dayNote;
+  showImageryPurpose();
+  // The chip carries an unavailability message when a fetch failed, so it is only
+  // relabelled while it still reads as a working control.
+  if (trail !== false) $('chip-trail').querySelector('span').textContent = c().trailChip;
   // A hint already on screen follows the language. Re-deriving it costs nothing;
   // refetching it would cost Overpass a query.
   if (!$('detail-hint').hidden) {
@@ -376,7 +586,8 @@ async function boot() {
 
   view = createMap('map', { center: [46.6, 2.5], zoom: 6 });
   view.setBase('plan_ign');
-  ['fires', 'spread', 'closures', 'detail'].forEach((n) => view.toggle(n, true));
+  ['fires', 'spread', 'closures', 'detail', 'official', 'evacuated', 'burnt']
+    .forEach((n) => view.toggle(n, true));
 
   dates = availableDates(todayUTC(), 22);
 
@@ -391,12 +602,15 @@ async function boot() {
     chip.onclick = () => {
       const on = chip.getAttribute('aria-pressed') !== 'true';
       chip.setAttribute('aria-pressed', String(on));
+      // The trail is lazy-loaded and owns its own toggle path.
+      if (chip.dataset.layer === 'history') { showTrail(on); return; }
       view.toggle(chip.dataset.layer, on);
       if (chip.dataset.layer === 'detail' && on) loadDetail();
     };
   });
   $('imagery').onchange = applyImagery;
   $('scrub').oninput = applyImagery;
+  $('day').oninput = applyTrail;
   $('lang').onclick = () => {
     lang = lang === 'fr' ? 'en' : 'fr';
     store(LANG_KEY, lang);
@@ -411,11 +625,17 @@ async function boot() {
 
   applyLanguage();
 
-  const [index, loaded] = await Promise.all([
+  // The departement feeds load with the summary: they carry closed roads and
+  // evacuation orders, which are the two things a reader most needs and cannot get
+  // anywhere else. `false` on failure, never {} -- an empty object would render as
+  // "nothing is shut" when the truth is that we could not ask.
+  const [index, loaded, local] = await Promise.all([
     loadJSON('data/zones/index.json'),
     loadJSON('data/summary.json').catch(() => null),
+    loadJSON('data/gironde.json').catch(() => false),
   ]);
   summary = loaded;
+  official = local;
 
   const select = $('zone-select');
   for (const z of index.zones || []) {

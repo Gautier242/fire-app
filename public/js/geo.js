@@ -23,6 +23,30 @@ export function bearingDeg(a, b) {
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
+// A point `km` away along `bearing`, for drawing an arrow that has to mean
+// something on the ground rather than be a fixed number of pixels.
+//
+// The caller owns the flip. Meteorology reports the direction wind blows FROM, so
+// an arrow drawn on the reported bearing points at the reader instead of away; every
+// caller here passes wind_dir + 180 deliberately.
+//
+// Returns null on unusable input rather than a point at the origin, which would draw
+// a zero-length arrow that reads as no wind.
+export function offsetPoint(from, bearing, km) {
+  if (!from || typeof bearing !== 'number' || !Number.isFinite(bearing)) return null;
+  if (!km || km <= 0) return null;
+  const R = 6371;
+  const b = toRad(bearing);
+  const lat1 = toRad(from.lat);
+  const lon1 = toRad(from.lon);
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(km / R)
+    + Math.cos(lat1) * Math.sin(km / R) * Math.cos(b));
+  const lon2 = lon1 + Math.atan2(
+    Math.sin(b) * Math.sin(km / R) * Math.cos(lat1),
+    Math.cos(km / R) - Math.sin(lat1) * Math.sin(lat2));
+  return { lat: (lat2 * 180) / Math.PI, lon: (((lon2 * 180) / Math.PI + 540) % 360) - 180 };
+}
+
 const POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 export function compassPoint(deg) {

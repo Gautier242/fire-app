@@ -4,6 +4,7 @@ import { aqhiBand } from './status.js';
 import { tileUrl } from './imagery.js';
 import { ENDPOINT as EFFIS_ENDPOINT } from './effis.js';
 import { trailOpacity } from './history.js';
+import { offsetPoint } from './geo.js';
 
 const CANADA_CENTRE = [56, -96];
 const CANADA_ZOOM = 4;
@@ -143,6 +144,12 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
     // Overpass returns for the current viewport.
     spread: L.layerGroup(),
     detail: L.layerGroup(),
+    // The Gironde departement's own crisis feeds. Separate groups so a reader can
+    // have the roads without the evacuation wash, and so an unavailable feed can
+    // leave its own layer empty without emptying the others.
+    official: L.layerGroup(),
+    evacuated: L.layerGroup(),
+    burnt: L.layerGroup(),
     satellite: gibs,
     // Rain matters to a fire: it is the thing that stops one. RainViewer
     // publishes a free radar mosaic, refreshed roughly every ten minutes.
@@ -198,6 +205,67 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
         if (map.hasLayer(l) && l.bringToFront) l.bringToFront();
       });
       return imageryOverlay;
+    },
+
+    // The département's own crisis picture: which roads are shut, which communes are
+    // evacuated, which ground has burned.
+    //
+    // Everything here is observed and authored by the service fighting the fire, so
+    // none of it draws dashed. Dashed is reserved for the Rothermel wedges and the
+    // computed hull, and that separation is the only way a reader can tell a mapped
+    // perimeter from a modelled one without reading a caption.
+    drawOfficial(local, labels = {}) {
+      layers.official.clearLayers();
+      layers.evacuated.clearLayers();
+      layers.burnt.clearLayers();
+      if (!local) return;
+
+      // Burned ground first and underneath: it is context for everything else.
+      if (local.burn_area && local.burn_area.geometry) {
+        const area = local.burn_area.area_km2;
+        L.geoJSON(local.burn_area.geometry, {
+          style: { color: '#5B4636', weight: 2, fillColor: '#5B4636',
+                   fillOpacity: 0.35, dashArray: null },
+        }).bindPopup(`<b>${labels.burnt || 'Zone brûlée'}</b>`
+          + (area ? `<br>${area} km²` : '')
+          + `<br><small>${local.source || ''}</small>`)
+          .addTo(layers.burnt);
+      }
+
+      // Evacuated communes. A wash rather than a hard fill: the order covers the
+      // commune, and a solid block would hide the roads out of it.
+      for (const commune of local.evacuations || []) {
+        L.geoJSON(commune.geometry, {
+          style: { color: '#E4344F', weight: 2, fillColor: '#E4344F',
+                   fillOpacity: 0.16 },
+        }).bindPopup(`<b>${labels.evacuated || 'Commune évacuée'}</b><br>${commune.name || ''}`
+          + `<br><small>${local.source || ''}</small>`)
+          .addTo(layers.evacuated);
+      }
+
+      // Closed roads, as the lines they are. Fire closures read hot; a closure for
+      // any other cause is drawn cooler so the layer never implies every shut road
+      // is a fire closure.
+      for (const closure of local.closures || []) {
+        const fire = closure.fire_related;
+        L.geoJSON(closure.geometry, {
+          style: { color: fire ? '#E4344F' : '#7A8894', weight: fire ? 5 : 3,
+                   opacity: fire ? 0.95 : 0.7 },
+        }).bindPopup(`<b>${closure.road || ''} — ${closure.kind || ''}</b>`
+          + (closure.cause ? `<br>${closure.cause}` : '')
+          + (closure.incident ? `<br>${closure.incident}` : '')
+          + `<br><small>${local.source || ''}</small>`)
+          .addTo(layers.official);
+      }
+
+      // Official detours: the département's own answer to "which way out".
+      for (const detour of local.detours || []) {
+        L.geoJSON(detour.geometry, {
+          style: { color: '#2E7D5B', weight: 4, opacity: 0.9 },
+        }).bindPopup(`<b>${labels.detour || 'Déviation'}</b><br>${detour.road || ''}`
+          + `<br><small>${local.source || ''}</small>`)
+          .addTo(layers.official);
+      }
     },
 
     // A past season's burn scars. Separate from setImagery because it answers a
@@ -496,6 +564,39 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
             + `${(arc.distance_m / 1000).toFixed(1)} km ${labels.inHours(projection.hours || 3)}`
             + `<br>${arc.ros_m_min} m/min · ${arc.wind_kmh || '—'} km/h`
             + `<br><i>${labels.spreadCaveat}</i>`)
+            .addTo(layers.spread);
+        }
+      }
+
+      // Which way the wind is actually blowing, as an arrow on the ground.
+      //
+      // Wind was reachable only by opening a fire's popup or reading the rail, so
+      // the one fact that decides which way a fire runs was invisible on the map
+      // the reader is looking at. Drawn from the zone's own forecast hour, one
+      // arrow, scaled to the wind speed so a gale looks like one.
+      const hour = (zone && zone.wind && zone.wind[0]) || null;
+      if (hour && typeof hour.wind_dir === 'number' && zone.lat && zone.lon) {
+        const centre = { lat: zone.lat, lon: zone.lon };
+        // + 180: the reported direction is where the wind comes FROM.
+        const toward = (hour.wind_dir + 180) % 360;
+        const km = Math.max(3, Math.min(14, (hour.wind_kmh || 10) * 0.6));
+        const tip = offsetPoint(centre, toward, km);
+        if (tip) {
+          const barb = (side) => offsetPoint(tip, (toward + 180 + side) % 360, km * 0.28);
+          const left = barb(-32);
+          const right = barb(32);
+          const style = { color: '#1B6C8C', weight: 3, opacity: 0.9 };
+          L.polyline([[centre.lat, centre.lon], [tip.lat, tip.lon]], style)
+            .addTo(layers.spread);
+          if (left && right) {
+            L.polyline([[left.lat, left.lon], [tip.lat, tip.lon],
+                        [right.lat, right.lon]], style).addTo(layers.spread);
+          }
+          L.circleMarker([tip.lat, tip.lon], {
+            radius: 1, opacity: 0, fillOpacity: 0,
+          }).bindPopup(`<b>${labels.windArrow || 'Vent'}</b><br>`
+            + `${hour.wind_kmh || '—'} km/h → ${hour.wind_toward || ''}`
+            + (hour.gust_kmh ? `<br>${labels.gusts || 'Rafales'}: ${hour.gust_kmh} km/h` : ''))
             .addTo(layers.spread);
         }
       }

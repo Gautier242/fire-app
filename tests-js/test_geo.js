@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { haversineKm, bearingDeg, compassPoint, pointInPolygon, pointInMultiPolygon, nearest } from '../public/js/geo.js';
+import { haversineKm, bearingDeg, compassPoint, pointInPolygon, pointInMultiPolygon, nearest, offsetPoint } from '../public/js/geo.js';
 
 const VANCOUVER = { lat: 49.2827, lon: -123.1207 };
 const KAMLOOPS  = { lat: 50.6745, lon: -120.3273 };
@@ -57,4 +57,32 @@ test('nearest returns the closest item and its distance', () => {
 
 test('nearest returns null for an empty list', () => {
   assert.equal(nearest(VANCOUVER, []), null);
+});
+
+// A wind arrow has to point the way the wind is GOING, not where it comes from.
+// Meteorology reports the direction it blows FROM, and drawing that unflipped puts
+// the arrow 180 degrees wrong -- straight at the reader instead of away.
+test('an arrow tip is offset along the direction the wind is blowing toward', () => {
+  const from = { lat: 44.86, lon: -0.88 };
+
+  // Wind FROM the west (270) blows toward the east: longitude must increase.
+  const east = offsetPoint(from, 270 + 180, 5);
+  assert.ok(east.lon > from.lon, 'a westerly must push the tip east');
+  assert.ok(Math.abs(east.lat - from.lat) < 0.01, 'and barely change latitude');
+
+  // Wind FROM the north (0) blows south: latitude must decrease.
+  const south = offsetPoint(from, 180, 5);
+  assert.ok(south.lat < from.lat, 'a northerly must push the tip south');
+
+  // The offset is a real distance, not a fixed degree step.
+  const near = offsetPoint(from, 90, 1);
+  const far = offsetPoint(from, 90, 10);
+  assert.ok(Math.abs(far.lon - from.lon) > Math.abs(near.lon - from.lon) * 5);
+});
+
+test('a bad bearing or distance yields no point rather than a wrong one', () => {
+  const from = { lat: 44.86, lon: -0.88 };
+  assert.equal(offsetPoint(from, null, 5), null);
+  assert.equal(offsetPoint(from, 90, 0), null);
+  assert.equal(offsetPoint(null, 90, 5), null);
 });

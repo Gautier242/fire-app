@@ -48,3 +48,29 @@ test('a thermal anomaly layer exists so past fire activity can be seen', () => {
   assert.ok(thermal, 'MODIS thermal anomalies must be selectable');
   assert.equal(thermal.dated, true);
 });
+
+// "VIIRS NOAA-20 · 375 m · quotidien" is accurate and tells a member of the public
+// nothing about when to pick it. Every layer carries a plain sentence saying what
+// it is good for, in both languages.
+test('every imagery layer says what it is for, not only what it is', () => {
+  for (const layer of LAYERS) {
+    for (const lang of ['fr', 'en']) {
+      const why = layer.purpose && layer.purpose[lang];
+      assert.ok(why, `${layer.id} has no purpose in ${lang}`);
+      assert.ok(why.length > 15, `${layer.id} purpose in ${lang} is too short to help`);
+      // A resolution or a sensor name is not a purpose.
+      assert.ok(!/^\d|VIIRS|MODIS|Landsat|Sentinel/i.test(why),
+        `${layer.id} purpose in ${lang} repeats the sensor instead of the use`);
+    }
+  }
+});
+
+test('a purpose never promises to show a fire that may not be visible', () => {
+  for (const layer of LAYERS) {
+    for (const lang of ['fr', 'en']) {
+      const why = layer.purpose[lang].toLowerCase();
+      assert.ok(!/\bvoir les feux\b|\bsee the fires\b/.test(why),
+        `${layer.id} promises fires are visible; cloud and pass timing decide that`);
+    }
+  }
+});
