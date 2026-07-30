@@ -4,7 +4,7 @@ import { aqhiBand } from './status.js';
 import { tileUrl } from './imagery.js';
 import { ENDPOINT as EFFIS_ENDPOINT } from './effis.js';
 import { trailOpacity } from './history.js';
-import { offsetPoint } from './geo.js';
+import { midpointOf, offsetPoint } from './geo.js';
 
 const CANADA_CENTRE = [56, -96];
 const CANADA_ZOOM = 4;
@@ -258,19 +258,45 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
           .addTo(layers.evacuated);
       }
 
-      // Closed roads, as the lines they are. Fire closures read hot; a closure for
-      // any other cause is drawn cooler so the layer never implies every shut road
-      // is a fire closure.
+      // Closed roads: a dashed red line along the shut stretch, and a no-entry sign
+      // on it. The convention a French driver already knows from a diversion, and
+      // the one Google uses, so it needs no legend to read at a glance.
+      //
+      // A closure for some other cause keeps the same shape in grey. The sign says
+      // "shut"; the colour says whether the fire is why.
       for (const closure of local.closures || []) {
         const fire = closure.fire_related;
-        L.geoJSON(closure.geometry, {
-          style: { color: fire ? '#E4344F' : '#7A8894', weight: fire ? 5 : 3,
-                   opacity: fire ? 0.95 : 0.7 },
-        }).bindPopup(`<b>${closure.road || ''} — ${closure.kind || ''}</b>`
+        const colour = fire ? '#D93025' : '#7A8894';
+        const popup = `<b>${closure.road || ''} — ${closure.kind || ''}</b>`
           + (closure.cause ? `<br>${closure.cause}` : '')
           + (closure.incident ? `<br>${closure.incident}` : '')
-          + `<br><small>${local.source || ''}</small>`)
-          .addTo(layers.official);
+          + `<br><small>${local.source || ''}</small>`;
+
+        const line = L.geoJSON(closure.geometry, {
+          style: { color: colour, weight: 4, opacity: 0.95, dashArray: '9 7',
+                   lineCap: 'butt' },
+        }).bindPopup(popup);
+        line.addTo(layers.official);
+
+        // One sign per closure, at the middle of the stretch. Leaflet gives the
+        // drawn coordinates back in [lat, lon], which is what midpointOf wants.
+        const drawn = [];
+        line.eachLayer((l) => {
+          const pts = l.getLatLngs ? l.getLatLngs() : [];
+          const flat = Array.isArray(pts[0]) ? pts.flat(2) : pts;
+          for (const p of flat) if (p && p.lat !== undefined) drawn.push([p.lat, p.lng]);
+        });
+        const at = midpointOf(drawn);
+        if (at) {
+          L.marker(at, {
+            icon: L.divIcon({
+              className: '', iconSize: [18, 18], iconAnchor: [9, 9],
+              html: `<span class="no-entry${fire ? '' : ' other'}"></span>`,
+            }),
+            keyboard: false,
+            alt: closure.road || 'Route coupée',
+          }).bindPopup(popup).addTo(layers.official);
+        }
       }
 
       // Official detours: the département's own answer to "which way out".
@@ -337,15 +363,23 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
       if (wasPlain) bases.plain.bringToBack();
     },
 
+    // `name` may list several layers, space separated. One chip often controls more
+    // than one group: "closed roads" means both the national points and the lines
+    // the departement publishes, and a chip that moved only one of them left signs
+    // on a map the reader had just cleared.
     toggle(name, on) {
-      const layer = layers[name];
-      if (!layer) return;
-      if (on) { layer.addTo(map); if (layer.bringToFront) layer.bringToFront(); }
-      else map.removeLayer(layer);
+      for (const key of String(name || '').split(/\s+/).filter(Boolean)) {
+        const layer = layers[key];
+        if (!layer) continue;
+        if (on) { layer.addTo(map); if (layer.bringToFront) layer.bringToFront(); }
+        else map.removeLayer(layer);
+      }
+      if (on) raiseLive();
     },
 
     isOn(name) {
-      return layers[name] ? map.hasLayer(layers[name]) : false;
+      const first = String(name || '').split(/\s+/).filter(Boolean)[0];
+      return layers[first] ? map.hasLayer(layers[first]) : false;
     },
 
     draw(summary) {

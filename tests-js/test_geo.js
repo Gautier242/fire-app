@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { haversineKm, bearingDeg, compassPoint, pointInPolygon, pointInMultiPolygon, nearest, offsetPoint } from '../public/js/geo.js';
+import { haversineKm, bearingDeg, compassPoint, pointInPolygon, pointInMultiPolygon, nearest, offsetPoint, midpointOf } from '../public/js/geo.js';
 
 const VANCOUVER = { lat: 49.2827, lon: -123.1207 };
 const KAMLOOPS  = { lat: 50.6745, lon: -120.3273 };
@@ -85,4 +85,23 @@ test('a bad bearing or distance yields no point rather than a wrong one', () => 
   assert.equal(offsetPoint(from, null, 5), null);
   assert.equal(offsetPoint(from, 90, 0), null);
   assert.equal(offsetPoint(null, 90, 5), null);
+});
+
+// A closed road needs a sign somewhere a reader will see it. The midpoint of the
+// shut stretch is where the eye goes, and it is on the road rather than at a
+// junction where it could be read as closing the wrong street.
+test('the midpoint of a line lands on the line, not at its ends', () => {
+  const line = [[44.86, -0.88], [44.87, -0.87], [44.88, -0.86]];
+  const mid = midpointOf(line);
+  assert.deepEqual(mid, [44.87, -0.87], 'the middle vertex of three');
+
+  // An even count has no middle vertex, so it takes the one past halfway.
+  const four = [[44.0, -1.0], [44.1, -1.0], [44.2, -1.0], [44.3, -1.0]];
+  const m4 = midpointOf(four);
+  assert.ok(m4[0] > 44.0 && m4[0] < 44.3, 'inside the line, not at an end');
+
+  // Degenerate input must not produce a sign at [0, 0].
+  assert.equal(midpointOf([]), null);
+  assert.equal(midpointOf([[44.0, -1.0]])[0], 44.0, 'a single point is its own middle');
+  assert.equal(midpointOf(null), null);
 });

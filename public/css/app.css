@@ -459,3 +459,23 @@ dd.air { color: var(--air); }
 .legend .lg.dashed {
   height: 0; border-top: 3px dashed var(--lg); background: none;
 }
+
+/* The no-entry sign: a red disc with a white bar. The sign a French driver already
+   knows from a diversion, so a closed road needs no legend to read. The Bison Fute
+   closures on the national map keep their plain marker; this is for the closures
+   the departement publishes as lines. */
+.no-entry {
+  display: block; width: 18px; height: 18px; border-radius: 50%;
+  background: #D93025; border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+  position: relative;
+}
+.no-entry::after {
+  content: ''; position: absolute; left: 3px; right: 3px; top: 6px;
+  height: 3px; background: #fff; border-radius: 1px;
+}
+/* Shut for some other reason. Same sign, so it still reads as "closed"; the colour
+   is what says the fire is not why. */
+.no-entry.other { background: #7A8894; }
+/* Distinct from the layer chips: it acts on all of them rather than being one. */
+.chip.clear { border-style: dashed; color: var(--muted); }

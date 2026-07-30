@@ -31,6 +31,9 @@ let detailAbort = null;
 // shut, failed means we could not ask, and those must not render the same.
 let official = null;
 let trail = null;
+// What was showing before the map was cleared, so restoring gives a reader their own
+// layers back rather than a default they never chose.
+let restore = [];
 
 function load(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -87,6 +90,8 @@ const COPY = {
     egressNone: 'Aucune route chargée ne mène vers la direction modélisée. Cela ne rend aucune route sûre : le modèle ne voit ni les fumées, ni les coupures, ni le trafic.',
     egressCannot: 'Impossible d\'évaluer les routes ici.',
     egressToward: 'Mène vers la propagation modélisée',
+    clearLayers: 'Tout masquer', showAll: 'Tout afficher',
+    egressZoom: `Zoomez (niveau ${MIN_ZOOM}) pour évaluer les routes.`,
     forcesTitle: 'Moyens visibles',
     aircraft: (n) => `${n} aéronef(s) observé(s) à proximité.`,
     noAircraftDay: "Aucun aéronef observé dans les dernières minutes. Cela ne veut pas dire qu'il n'y en a pas.",
@@ -138,6 +143,8 @@ const COPY = {
     egressNone: 'No loaded road leads toward the modelled direction. That makes no road safe: the model sees neither smoke, nor cuts, nor traffic.',
     egressCannot: 'The roads here cannot be assessed.',
     egressToward: 'Leads toward the modelled spread',
+    clearLayers: 'Hide all', showAll: 'Show all',
+    egressZoom: `Zoom in (level ${MIN_ZOOM}) to assess roads.`,
     forcesTitle: 'Visible response',
     aircraft: (n) => `${n} aircraft observed nearby.`,
     noAircraftDay: 'No aircraft observed in the last few minutes. That does not mean there are none.',
@@ -517,6 +524,15 @@ function currentLayer() {
   return LAYERS.find((l) => l.id === $('imagery').value) || null;
 }
 
+// The control says what pressing it will do, not what state the map is in.
+function applyClearLabel() {
+  const button = $('clear-layers');
+  if (!button) return;
+  const anyOn = [...document.querySelectorAll('.chip[data-layer]')]
+    .some((x) => x.getAttribute('aria-pressed') === 'true');
+  button.querySelector('span').textContent = anyOn ? c().clearLayers : c().showAll;
+}
+
 function showImageryPurpose() {
   const layer = currentLayer();
   $('imagery-note').textContent = layer
@@ -656,7 +672,7 @@ async function boot() {
   // wall of amber over half the streets on screen tells a reader nothing while
   // looking authoritative. The count and the caveat are in the rail either way, so
   // nothing is hidden; only the overlay waits to be asked for.
-  ['fires', 'spread', 'closures', 'detail', 'official', 'evacuated', 'burnt']
+  ['fires', 'spread', 'closures official', 'detail', 'evacuated', 'burnt']
     .forEach((n) => view.toggle(n, true));
 
   dates = availableDates(todayUTC(), 22);
@@ -676,8 +692,47 @@ async function boot() {
       if (chip.dataset.layer === 'history') { showTrail(on); return; }
       view.toggle(chip.dataset.layer, on);
       if (chip.dataset.layer === 'detail' && on) loadDetail();
+      // Egress is computed from the Overpass roads, which only load past MIN_ZOOM.
+      // Below that the layer is empty, so the chip appeared to do nothing at all --
+      // it is the one control on this page whose data the reader has to go and get.
+      applyClearLabel();
+      if (chip.dataset.layer === 'egress' && on) {
+        if (view.map.getZoom() < MIN_ZOOM) hint(c().egressZoom);
+        else if (!view.isOn('detail')) {
+          const detailChip = document.querySelector('.chip[data-layer="detail"]');
+          if (detailChip) detailChip.setAttribute('aria-pressed', 'true');
+          view.toggle('detail', true);
+          loadDetail();
+        } else loadDetail();
+      }
     };
   });
+  // One control to clear the map, so a reader can look at exactly one thing.
+  // Remembers what was on, so pressing it again restores that rather than an
+  // arbitrary default -- somebody who cleared the map to read the closures should
+  // get their own layers back, not ours.
+  $('clear-layers').onclick = () => {
+    const chips = [...document.querySelectorAll('.chip[data-layer]')];
+    const anyOn = chips.some((x) => x.getAttribute('aria-pressed') === 'true');
+    if (anyOn) {
+      restore = chips.filter((x) => x.getAttribute('aria-pressed') === 'true')
+        .map((x) => x.dataset.layer);
+      for (const chip of chips) {
+        chip.setAttribute('aria-pressed', 'false');
+        if (chip.dataset.layer === 'history') showTrail(false);
+        else view.toggle(chip.dataset.layer, false);
+      }
+    } else {
+      for (const chip of chips) {
+        const on = restore.includes(chip.dataset.layer);
+        chip.setAttribute('aria-pressed', String(on));
+        if (chip.dataset.layer === 'history') showTrail(on);
+        else view.toggle(chip.dataset.layer, on);
+      }
+    }
+    applyClearLabel();
+  };
+
   $('imagery').onchange = applyImagery;
   $('scrub').oninput = applyImagery;
   $('day').oninput = applyTrail;

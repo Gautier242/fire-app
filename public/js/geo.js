@@ -47,6 +47,14 @@ export function offsetPoint(from, bearing, km) {
   return { lat: (lat2 * 180) / Math.PI, lon: (((lon2 * 180) / Math.PI + 540) % 360) - 180 };
 }
 
+// Where to put the marker for a closed stretch of road: the middle of the stretch,
+// so the sign sits on the closed part rather than at a junction where it would read
+// as shutting the wrong street. Takes [lat, lon] pairs.
+export function midpointOf(line) {
+  if (!Array.isArray(line) || !line.length) return null;
+  return line[Math.floor((line.length - 1) / 2)];
+}
+
 const POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 export function compassPoint(deg) {
