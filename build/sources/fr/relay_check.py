@@ -36,7 +36,7 @@ REACHABLE_BELOW = 400
 
 
 def _status(url):
-    """The status code, and not one byte of the page behind it."""
+    """The status code. The page behind it is never read."""
     with make_session().get(url, timeout=TIMEOUT_SECONDS, stream=True) as response:
         return response.status_code
 
