@@ -488,3 +488,16 @@ def test_the_full_herault_register_counts_as_a_whole_departement():
 def test_fetch_keeps_a_geopackage_as_bytes_rather_than_decoding_it():
     session = _Session(bodies={"peis-herault-l93.gpkg": GPKG["herault_sdis"]})
     assert water.fetch(session)["herault_sdis"] == GPKG["herault_sdis"]
+
+
+def test_every_point_is_counted_in_exactly_one_coverage_row():
+    """The provenance page derives its national total from the coverage counts.
+
+    water.json no longer publishes the points, so `sum(count)` is the only
+    remaining statement of how many water points we hold. If a point could be
+    dropped after being counted, that page would overstate the register — the
+    direction that tells a firefighter there is more water than there is.
+    """
+    layer = water.normalize(PAYLOAD)
+
+    assert sum(row["count"] for row in layer["coverage"]) == len(layer["points"])

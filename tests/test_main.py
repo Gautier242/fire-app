@@ -1,7 +1,7 @@
 import pytest
 
 from build.http import FetchError
-from build.main import build
+from build.main import build, water_index
 
 NOW = "2026-07-28T12:00:00Z"
 
@@ -107,3 +107,32 @@ def test_a_failing_road_feed_keeps_its_last_good_closures():
     assert roads["stale"] is True
     assert roads["fetched_at"] == "2026-07-28T11:00:00Z"
     assert summary["closures"] == previous["closures"]
+
+
+def test_the_published_water_file_carries_coverage_without_the_coordinates():
+    """water.json exists for the provenance page, which draws no map.
+
+    It was 9.1 MB of coordinates for a page that renders eleven rows and one
+    total. The points now travel inside the zone files that actually need them,
+    narrowed to a radius; what remains here is the statement of which registers
+    exist, which is the part a reader needs to tell "no water" from "nobody
+    published a register".
+    """
+    layer = {"points": [{"id": "a", "lat": 43.1, "lon": -0.2, "tier": "register"}],
+             "coverage": [{"dep": "64", "area": "Pyrénées-Atlantiques",
+                           "scope": "departement", "count": 1, "tier": "register"}]}
+
+    published = water_index(layer)
+
+    assert published["coverage"] == layer["coverage"]
+    assert "points" not in published, (
+        "the coordinates are what made this file 9.1 MB and nothing draws them")
+
+
+def test_an_unreadable_water_register_publishes_nothing_rather_than_empty_coverage():
+    """A failed fetch must leave the previous file serving, not overwrite it.
+
+    Empty coverage renders as "no register covers anywhere in France", which is
+    a confident wrong answer about a country with eleven published registers.
+    """
+    assert water_index(None) is None

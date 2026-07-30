@@ -163,13 +163,33 @@ def build(now, previous, fetchers, country="ca"):
     }
 
 
+def water_index(layer):
+    """What water.json publishes: the coverage statement, not the coordinates.
+
+    The registers are national and every question asked of them is local, so the
+    points travel inside the zone files, narrowed to a radius. Nothing draws a
+    water marker anywhere in the app — the coordinates produced one sentence
+    naming a count, at 9.1 MB.
+
+    Coverage stays whole because it carries the distinction the layer exists
+    for: which registers were published at all. Without it "no water point here"
+    and "nobody surveyed here" collapse into the same silence.
+
+    None for a layer that never loaded, so the previous file keeps serving
+    rather than being replaced by a France with no registers in it.
+    """
+    if not layer:
+        return None
+    return {"coverage": layer.get("coverage") or []}
+
+
 def write_side_file(out, name, fetcher):
     """Write a lazy-loaded layer, or leave the previous one alone.
 
-    Some layers are far too big for the summary — the water points are 532 KB
-    gzipped against a 150 KB budget — and are only ever fetched by a reader who
-    asks for them. A failure here must not touch the summary: a missing layer is
-    an inconvenience, a missing danger level is not.
+    Some layers are far too big for the summary — the seven-day detection trail
+    is 40 KB gzipped against a 150 KB budget — and are only ever fetched by a
+    reader who asks for them. A failure here must not touch the summary: a
+    missing layer is an inconvenience, a missing danger level is not.
     """
     try:
         payload = fetcher()
@@ -211,7 +231,8 @@ def _median_slope(grid):
     return values[len(values) // 2] if values else None
 
 
-def _build_zones(summary, session, out, wildfires, surveyed=()):
+def _build_zones(summary, session, out, wildfires, surveyed=(),
+                 water_layer=None, hydrant_layer=None):
     """Pre-build detail files for today's hot zones.
 
     Every zone is independent and its failure is contained: the browser can fetch
@@ -263,7 +284,8 @@ def _build_zones(summary, session, out, wildfires, surveyed=()):
             zone_build.write_zone(zone_dir, zone, wildfires, wind_rows,
                                   terrain=None, spread=projections,
                                   closures=summary.get("closures"),
-                                  official_perimeter=zone["id"] in surveyed)
+                                  official_perimeter=zone["id"] in surveyed,
+                                  water=water_layer, hydrants=hydrant_layer)
             built.append(zone)
         except Exception:  # noqa: BLE001 - one bad zone must not lose the others
             continue
@@ -377,12 +399,30 @@ def apply_france_extras(summary, session, out, previous_flares):
     else:
         print("WARNING: OSM hydrants unavailable; that is not the absence of water")
 
+    # The register is fetched here, ahead of the zones, because the zone files
+    # carry its points narrowed to their own radius. water.json publishes only
+    # the coverage statement: nothing in the app draws a water marker, and the
+    # 74,632 coordinates existed to produce one sentence naming a count.
+    try:
+        register = water.normalize(water.fetch(session))
+    except Exception:  # noqa: BLE001 - a missing register must not lose the summary
+        register = None
+    published = water_index(register)
+    if published:
+        _write_atomically(out / "water.json", published)
+        print(f"wrote {out / 'water.json'} ({len(register['points'])} points "
+              f"across {len(published['coverage'])} registers, coverage only)")
+    else:
+        print("WARNING: the water register is unavailable; the previous file keeps "
+              "serving. That is not the absence of water")
+
     # Which zones already have somebody's surveyed perimeter. Derived from what was
     # actually fetched rather than from a hardcoded list, so a failed fetch correctly
     # falls back to a computed hull instead of leaving the ground unmapped.
     surveyed = {"gironde"} if (local and local.get("burn_area")) else set()
 
-    _build_zones(summary, session, out, wildfires, surveyed)
+    _build_zones(summary, session, out, wildfires, surveyed,
+                 water_layer=register, hydrant_layer=crowd)
 
     # Aircraft are matched against real wildfires only. An aircraft circling a
     # refinery flare is not fighting a fire.
@@ -483,11 +523,6 @@ def main():
         print(f"WARNING: stale sources: {', '.join(failed)}")
 
     if country == "fr":
-        water_layer = write_side_file(
-            out, "water.json", lambda: water.normalize(water.fetch(session)))
-        if water_layer:
-            print(f"wrote {out / 'water.json'} ({len(water_layer.get('points', []))} water points)")
-
         # Seven days of detections, so a reader can see where the fire has already
         # been. A side file, not a summary section: it is 3 MB of bulk CSV per
         # build, and a timeout on it must never be able to block the danger map.
