@@ -2,7 +2,7 @@
 // Every test runs offline against the in-memory store and an injected clock.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { LIMITS, handle } from './index.js';
+import worker, { LIMITS, handle } from './index.js';
 import { memoryStore } from './memory_store.js';
 
 const T0 = Date.UTC(2026, 6, 30, 12, 0, 0);
@@ -415,4 +415,56 @@ test('a store that cannot read answers 503 rather than an empty board', async ()
   assert.equal(response.status, 503);
   const payload = await body(response);
   assert.equal(payload.records, undefined);
+});
+
+// A stand-in for Workers KV, mimicking only the four calls the adapter makes.
+// It proves the adapter's shape assumptions, not KV's behaviour.
+function fakeKv() {
+  const map = new Map();
+  return {
+    ttls: [],
+    async get(key, type) {
+      assert.equal(type, 'json', 'the adapter must ask KV to parse');
+      const raw = map.get(key);
+      return raw === undefined ? null : JSON.parse(raw);
+    },
+    async put(key, raw, options) {
+      assert.equal(typeof raw, 'string', 'KV stores strings');
+      if (options && options.expirationTtl) this.ttls.push(options.expirationTtl);
+      map.set(key, raw);
+    },
+    async list({ prefix, limit }) {
+      const keys = [...map.keys()].filter((k) => k.startsWith(prefix)).slice(0, limit);
+      return { keys: keys.map((name) => ({ name })) };
+    },
+    async delete(key) { map.delete(key); },
+  };
+}
+
+test('the deployable entrypoint carries a submission through to the board', async () => {
+  const kv = fakeKv();
+  const env = { NEEDS: kv, MODERATOR_TOKEN: TOKEN };
+
+  const accepted = await worker.fetch(post('/api/submit', OFFER), env);
+  assert.equal(accepted.status, 202);
+  const { id } = await body(accepted);
+
+  const board = await body(await worker.fetch(get('/api/board'), env));
+  assert.deepEqual(board.records, [], 'the entrypoint published without review');
+
+  assert.equal((await worker.fetch(post('/api/review', { id, action: 'publish' }, { token: TOKEN }), env)).status, 200);
+  const after = await body(await worker.fetch(get('/api/board'), env));
+  assert.equal(after.records.length, 1);
+  assert.equal(after.records[0].id, id);
+
+  // Every stored key carries a storage TTL, so nothing lives in KV forever.
+  assert.ok(kv.ttls.length >= 3);
+  assert.ok(Math.max(...kv.ttls) <= LIMITS.recordLifetimeMs / 1000);
+});
+
+test('a missing KV binding fails closed instead of serving an empty board', async () => {
+  // The configuration mistake this project has already shipped once: a broken
+  // source rendering as "nothing to report".
+  const response = await worker.fetch(get('/api/board'), { MODERATOR_TOKEN: TOKEN });
+  assert.equal(response.status, 503);
 });

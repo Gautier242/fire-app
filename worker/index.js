@@ -334,3 +334,40 @@ function sameSecret(a, b) {
   for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+// The storage boundary, Workers KV on the other side. The only untested-against-
+// reality code here: memory_store.js is the same interface for the tests, and the
+// fake KV in the test file checks this adapter's shape assumptions.
+export function kvStore(kv) {
+  return {
+    async get(key) {
+      return await kv.get(key, 'json');
+    },
+    async put(key, value, options = {}) {
+      const settings = options.ttlSeconds ? { expirationTtl: options.ttlSeconds } : {};
+      await kv.put(key, JSON.stringify(value), settings);
+    },
+    async list(prefix, cap) {
+      const { keys } = await kv.list({ prefix, limit: cap });
+      const values = await Promise.all(keys.map((k) => kv.get(k.name, 'json')));
+      return values.filter(Boolean);
+    },
+    async delete(key) {
+      await kv.delete(key);
+    },
+  };
+}
+
+// A missing NEEDS binding makes every store call throw, which handle() turns into
+// 503. That is deliberate: a misconfigured deployment must not answer reads with
+// an empty board, because "nothing to report" is exactly how a broken source
+// disguises itself on this site.
+export default {
+  async fetch(request, env) {
+    return await handle(request, {
+      store: kvStore(env.NEEDS),
+      now: () => Date.now(),
+      moderatorToken: env.MODERATOR_TOKEN,
+    });
+  },
+};
