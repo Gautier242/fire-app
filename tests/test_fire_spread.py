@@ -94,7 +94,11 @@ def test_matches_a_published_reference_value():
     got_m_min = rate_of_spread(fuel, moisture=0.05, wind_kmh=wind_kmh, slope_deg=0)
 
     published_m_min = 81.6 * 0.3048
-    assert abs(got_m_min - published_m_min) / published_m_min < 0.10
+    # The sources page states this deviation as 0.02 percent in both languages.
+    # The bound is 0.03 percent so that any drift which would make that published
+    # claim false fails here, rather than leaving the page confidently precise
+    # about a number nothing checks. Measured deviation is 0.0193 percent.
+    assert abs(got_m_min - published_m_min) / published_m_min < 0.0003
 
 
 def test_a_projection_carries_its_own_uncertainty_and_provenance():

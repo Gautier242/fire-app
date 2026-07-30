@@ -5,6 +5,9 @@
 // 50 km radius is about 966,000 buildings and a 100 km radius about 3.85
 // million — neither loadable by Overpass nor survivable by a browser. The same
 // data by viewport is roughly 7,400 buildings at zoom 13 and 490 at zoom 15.
+// Those two figures carry rural density; a dense city centre is far above them.
+// Central Bordeaux at zoom 15 measured 34,647 buildings, which still renders, so
+// size nothing off the 490 — it is the floor of the range, not the worst case.
 //
 // Overpass is a free volunteer-run service. One query per viewport change, a
 // timeout on every query, and never a query without a bounding box.
