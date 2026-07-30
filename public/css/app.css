@@ -379,6 +379,13 @@ dd.air { color: var(--air); }
   background: var(--surface); color: var(--ink);
   border: 1px solid var(--line); border-radius: var(--r);
 }
+/* Archival burn scars, forced cold. EFFIS serves its burnt-area polygons in
+   rgb(253,191,111) -- 14 units from the live-fire #FFC061 in mapview.js, 3% of
+   the RGB diagonal. Unfiltered, a scar from 2016 renders in essentially the
+   colour this map uses for a fire burning now. sepia() collapses the input hue
+   first, so the amber polygons and the purple point sublayer land on the same
+   blue instead of two unrelated ones. Not cosmetic: removing this ships amber. */
+.effis-scar { filter: sepia(1) hue-rotate(185deg) saturate(2.5) brightness(0.9); }
 .leaflet-popup-content { font-size: 0.9rem; }
 .leaflet-popup-content b { font-family: var(--mono); font-size: 0.82rem; }
 

@@ -2,6 +2,7 @@
 // Owns nothing but the map — all decisions about what to say live in rail.js.
 import { aqhiBand } from './status.js';
 import { tileUrl } from './imagery.js';
+import { ENDPOINT as EFFIS_ENDPOINT } from './effis.js';
 
 const CANADA_CENTRE = [56, -96];
 const CANADA_ZOOM = 4;
@@ -153,6 +154,7 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
   let currentBase = 'plain';
   let youMarker = null;
   let imageryOverlay = null;
+  let scarOverlay = null;
 
   return {
     map,
@@ -195,6 +197,29 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
         if (map.hasLayer(l) && l.bringToFront) l.bringToFront();
       });
       return imageryOverlay;
+    },
+
+    // A past season's burn scars. Separate from setImagery because it answers a
+    // different question — has this ground burned before, not what does it look
+    // like today — and because the two must be able to show at once.
+    //
+    // The cold filter is not decoration. EFFIS serves its burnt-area polygons in
+    // rgb(253,191,111), which is 14 units from HEAT[0] in this file: 3% of the RGB
+    // diagonal. Unfiltered, a 2016 scar renders in effectively live-fire amber on
+    // a map whose whole discipline is that archival and active never look alike.
+    // The filter lives in app.css against the class the module already sets.
+    setBurnScar(entry) {
+      if (scarOverlay) map.removeLayer(scarOverlay);
+      scarOverlay = null;
+      if (!entry) return null;
+      scarOverlay = L.tileLayer.wms(EFFIS_ENDPOINT, entry.wms);
+      scarOverlay.addTo(map);
+      // Below live detections always: a scar must never cover a current fire.
+      if (scarOverlay.bringToBack) scarOverlay.bringToBack();
+      Object.values(layers).forEach((l) => {
+        if (map.hasLayer(l) && l.bringToFront) l.bringToFront();
+      });
+      return scarOverlay;
     },
 
     refreshBase() {

@@ -33,7 +33,7 @@
 //   means a reader sees polygons zoomed in on their own commune and points at
 //   national scale, with no client-side scale logic.
 
-const ENDPOINT = 'https://maps.effis.emergency.copernicus.eu/effis';
+export const ENDPOINT = 'https://maps.effis.emergency.copernicus.eu/effis';
 
 // EFFIS holds 2016 onwards; modis.ba.2015 answers with a ServiceExceptionReport.
 export const YEARS = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016];

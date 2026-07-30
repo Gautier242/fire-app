@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  YEARS, LAYERS, EFFIS_SERVED_COLOURS, SCAR_COLD, SCAR_FILTER,
+  YEARS, LAYERS, EFFIS_SERVED_COLOURS, SCAR_COLD, SCAR_FILTER, SCAR_CLASS,
   getMapUrl, probeYear,
 } from '../public/js/effis.js';
 
@@ -206,4 +206,35 @@ test('every entry carries the cold class so no scar can ship unfiltered', () => 
   for (const entry of LAYERS) {
     assert.equal(entry.wms.className, 'effis-scar');
   }
+});
+
+// The filter is the only thing keeping an archival scar from rendering in
+// live-fire amber, and it lives in CSS while the class that carries it lives in
+// JS. Nothing else checks that those two still agree.
+test('the cold filter that ships is the one the module specifies', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
+
+  const rule = css.match(/\.effis-scar\s*\{([^}]*)\}/);
+  assert.ok(rule, 'app.css must carry a .effis-scar rule or every scar ships amber');
+  const declared = rule[1].match(/filter:\s*([^;]+)/);
+  assert.ok(declared, '.effis-scar must set a filter');
+  assert.equal(declared[1].trim(), SCAR_FILTER,
+    'the stylesheet and the module disagree about the scar filter');
+
+  // And every catalogue entry must actually ask for that class.
+  for (const entry of LAYERS) {
+    assert.equal(entry.wms.className, SCAR_CLASS, `${entry.id} would ship unfiltered`);
+  }
+});
+
+test('the served colour really is close enough to live fire to need filtering', () => {
+  // The reason the rule above exists, as arithmetic rather than a comment.
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [sr, sg, sb] = rgb(EFFIS_SERVED_COLOURS[0]);   // what EFFIS draws
+  const [hr, hg, hb] = rgb('#FFC061');                 // HEAT[0] in mapview.js
+  const distance = Math.hypot(sr - hr, sg - hg, sb - hb);
+  assert.ok(distance < 20,
+    `served scar is ${distance.toFixed(1)} from live-fire amber; if this ever grows `
+    + 'past 20 the filter may no longer be load-bearing, but check before removing it');
 });
