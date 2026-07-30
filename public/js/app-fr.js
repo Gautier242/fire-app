@@ -39,7 +39,7 @@ const COPY = {
   fr: {
     locate: 'Vérifier près de chez moi', checking: 'Vérification…',
     picker: 'Ou cherchez une adresse', hint: 'Adresse, ville ou village',
-    change: 'Changer', other: 'Canada', lang: 'English',
+    change: 'Changer', other: 'Canada', lang: 'English', local: 'Vue locale',
     updated: (m) => `Mis à jour il y a ${m} min`,
     stale: "Cette information date de plus d'une heure.",
     loading: 'Chargement…', failed: 'Données indisponibles.',
@@ -56,7 +56,7 @@ const COPY = {
   en: {
     locate: 'Check near me', checking: 'Checking…',
     picker: 'Or search an address', hint: 'Address, town or village',
-    change: 'Change', other: 'Canada', lang: 'Français',
+    change: 'Change', other: 'Canada', lang: 'Français', local: 'Local view',
     updated: (m) => `Updated ${m} min ago`,
     stale: 'This information is more than an hour old.',
     loading: 'Loading…', failed: 'Data unavailable.',
@@ -152,6 +152,7 @@ function applyLanguage() {
   $('change-place').textContent = t.change;
   $('lang').textContent = t.lang;
   $('ca-link').textContent = t.other;
+  $('zone-link').textContent = t.local;
   if (summary && departements) drawMap();
   renderRail();
 }

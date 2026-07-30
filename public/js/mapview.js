@@ -1,6 +1,7 @@
 // Leaflet map: basemaps, data layers, and the you-are-here marker.
 // Owns nothing but the map — all decisions about what to say live in rail.js.
 import { aqhiBand } from './status.js';
+import { tileUrl } from './imagery.js';
 
 const CANADA_CENTRE = [56, -96];
 const CANADA_ZOOM = 4;
@@ -59,6 +60,14 @@ function basemaps() {
     imagery: L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       { maxZoom: 19, attribution: 'Imagery &copy; Esri' }),
+    // IGN Plan v2 is France's official street map: named streets, tracks and
+    // hamlets, free and keyless. Better than CARTO once a reader zooms to their
+    // own street, which is the whole point of the local view.
+    plan_ign: L.tileLayer(
+      'https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile'
+      + '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM'
+      + '&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png',
+      { maxZoom: 19, attribution: 'IGN — data.geopf.fr' }),
   };
 }
 
@@ -69,6 +78,32 @@ export const FRANCE_ZOOM = 6;
 // on purpose: this is a forecast about conditions, not a detected fire, and the
 // two must not look alike.
 const DANGER_FILL = { 1: '#3FB98A', 2: '#E8C33D', 3: '#E8802D', 4: '#D2222D' };
+
+// A projected spread is a wedge, not a line: the wind direction it rides on is
+// a forecast with its own error. Half the opening angle, in degrees.
+const SPREAD_HALF_ANGLE = 25;
+const EARTH_M = 6371000;
+
+function destination(lat, lon, bearing, metres) {
+  const rad = Math.PI / 180;
+  const d = metres / EARTH_M;
+  const br = bearing * rad;
+  const lat1 = lat * rad;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d)
+    + Math.cos(lat1) * Math.sin(d) * Math.cos(br));
+  const lon2 = lon * rad + Math.atan2(
+    Math.sin(br) * Math.sin(d) * Math.cos(lat1),
+    Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  return [lat2 / rad, lon2 / rad];
+}
+
+function wedge(lat, lon, bearing, metres) {
+  const points = [[lat, lon]];
+  for (let a = -SPREAD_HALF_ANGLE; a <= SPREAD_HALF_ANGLE; a += 5) {
+    points.push(destination(lat, lon, bearing + a, metres));
+  }
+  return points;
+}
 
 export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOOM } = {}) {
   const map = L.map(elementId, {
@@ -102,6 +137,10 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
     history: L.layerGroup(),
     aircraft: L.layerGroup(),
     danger: L.layerGroup(),
+    // Local view only: the modelled spread wedges, and the buildings and streets
+    // Overpass returns for the current viewport.
+    spread: L.layerGroup(),
+    detail: L.layerGroup(),
     satellite: gibs,
     // Rain matters to a fire: it is the thing that stops one. RainViewer
     // publishes a free radar mosaic, refreshed roughly every ten minutes.
@@ -113,6 +152,7 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
 
   let currentBase = 'plain';
   let youMarker = null;
+  let imageryOverlay = null;
 
   return {
     map,
@@ -138,6 +178,23 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
       Object.values(layers).forEach((l) => {
         if (map.hasLayer(l) && l.bringToFront) l.bringToFront();
       });
+    },
+
+    // The imagery picker replaces one overlay rather than accumulating them:
+    // two stacked satellite layers show neither.
+    setImagery(layer, date) {
+      if (imageryOverlay) map.removeLayer(imageryOverlay);
+      imageryOverlay = null;
+      if (!layer) return null;
+      imageryOverlay = L.tileLayer(tileUrl(layer, date), {
+        maxNativeZoom: layer.maxNativeZoom, maxZoom: 19, opacity: 0.85,
+        attribution: layer.attribution,
+      });
+      imageryOverlay.addTo(map);
+      Object.values(layers).forEach((l) => {
+        if (map.hasLayer(l) && l.bringToFront) l.bringToFront();
+      });
+      return imageryOverlay;
     },
 
     refreshBase() {
@@ -375,6 +432,75 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
       }
     },
 
+    // The local view: the fires inside one zone, where the model says they are
+    // going, and the roads a reader must not take.
+    drawLocal(zone, labels) {
+      layers.fires.clearLayers();
+      layers.spread.clearLayers();
+      layers.closures.clearLayers();
+
+      for (const fire of (zone && zone.fires) || []) {
+        const radius = Math.min(18, 5 + Math.sqrt(fire.frp_total || 0) / 3);
+        L.circleMarker([fire.lat, fire.lon], {
+          radius, color: HEAT[2], fillColor: HEAT[1],
+          weight: 1, opacity: 0.9, fillOpacity: 0.55,
+        }).bindPopup(`<b>${labels.fire}</b><br>`
+          + `${Math.round(fire.frp_total || 0)} MW · ${fire.detections} ${labels.detections}`
+          + (fire.last_seen ? `<br>${labels.lastSeen}: ${fire.last_seen.slice(11, 16)} UTC` : ''))
+          .addTo(layers.fires);
+      }
+
+      // Two wedges per fire, mean wind and gust, both dashed. Dashed because a
+      // modelled shape must never look like an observed one, and both because
+      // one alone would imply a precision the model does not have.
+      for (const projection of (zone && zone.spread) || []) {
+        for (const arc of projection.arcs || []) {
+          const gust = arc.basis === 'gust';
+          L.polygon(wedge(projection.lat, projection.lon, arc.bearing, arc.distance_m), {
+            color: gust ? '#E8A33D' : HEAT[2],
+            weight: 2, dashArray: '8 6',
+            fillColor: gust ? '#E8A33D' : HEAT[2],
+            fillOpacity: gust ? 0.06 : 0.12,
+          }).bindPopup(`<b>${gust ? labels.spreadGust : labels.spreadMean}</b><br>`
+            + `${(arc.distance_m / 1000).toFixed(1)} km ${labels.inHours(projection.hours || 3)}`
+            + `<br>${arc.ros_m_min} m/min · ${arc.wind_kmh || '—'} km/h`
+            + `<br><i>${labels.spreadCaveat}</i>`)
+            .addTo(layers.spread);
+        }
+      }
+
+      // Where not to go. Bison Futé gives a point, not a line.
+      for (const closure of (zone && zone.closures) || []) {
+        if (closure.lat === null || closure.lat === undefined) continue;
+        L.circleMarker([closure.lat, closure.lon], {
+          radius: 7, color: '#FF4D6D', fillColor: '#FF4D6D',
+          weight: 2, fillOpacity: 0.75,
+        }).bindPopup(`<b>${closure.road} — ${closure.place}</b><br>${closure.headline || ''}`)
+          .addTo(layers.closures);
+      }
+    },
+
+    // Buildings and streets for the current viewport. Its own method rather than
+    // part of drawLocal: this redraws on every pan, and the fires must not.
+    drawDetail({ buildings = [], roads = [] } = {}) {
+      layers.detail.clearLayers();
+      for (const road of roads) {
+        const line = L.polyline(road.points, {
+          color: '#90A5B2', weight: 2, opacity: 0.7, interactive: !!road.name,
+        });
+        // An unnamed track is still an escape route, so it is drawn — it just
+        // has nothing to say when clicked.
+        if (road.name) line.bindPopup(`<b>${road.name}</b>`);
+        line.addTo(layers.detail);
+      }
+      for (const building of buildings) {
+        L.polygon(building.points, {
+          color: '#90A5B2', weight: 1, opacity: 0.55,
+          fillOpacity: 0.12, interactive: false,
+        }).addTo(layers.detail);
+      }
+    },
+
     // One satellite pass, with the passes before it faded so the direction of
     // growth is visible rather than remembered.
     drawHistory(points) {
@@ -392,7 +518,7 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
       }
     },
 
-    setYou(point) {
+    setYou(point, zoom = 8) {
       if (youMarker) map.removeLayer(youMarker);
       youMarker = L.marker([point.lat, point.lon], {
         icon: L.divIcon({
@@ -402,7 +528,7 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
         keyboard: false,
         alt: 'Your location',
       }).addTo(map);
-      map.setView([point.lat, point.lon], 8);
+      map.setView([point.lat, point.lon], zoom);
     },
 
     invalidate() { map.invalidateSize(); },

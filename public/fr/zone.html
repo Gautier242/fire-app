@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vue locale — Feux près de moi</title>
+  <meta name="description" content="Les cinquante kilomètres autour d'une adresse : la chaleur détectée, où le modèle la fait aller, les routes coupées, ce qui vole au-dessus.">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="../css/app.css">
+  <style>
+    /* Page-scoped: the local view's own blocks. Everything else reuses app.css. */
+    .zone-pick { padding: 0 20px 14px; }
+    .zone-pick select { width: 100%; }
+    select, .skills summary {
+      font-family: var(--sans); font-size: 0.9rem;
+      color: var(--ink); background: var(--raised);
+      border: 1px solid var(--line); border-radius: var(--r);
+      padding: 8px 10px;
+    }
+    .block { padding: 14px 20px; border-top: 1px solid var(--line-soft); }
+    .block[hidden] { display: none; }
+    .block h3 {
+      margin: 0 0 8px; font-family: var(--mono); font-size: 0.67rem;
+      text-transform: uppercase; letter-spacing: 0.11em; color: var(--faint);
+      font-weight: 500;
+    }
+    .block p { margin: 0 0 6px; font-size: 0.9rem; color: var(--muted); }
+    .block b { color: var(--ink); }
+    .block ul { margin: 0; padding-left: 18px; font-size: 0.88rem; color: var(--muted); }
+    .block li { margin-bottom: 6px; }
+    .verdict { font-size: 1rem; color: var(--ink); }
+    .verdict.toward { color: var(--danger); }
+    .skills summary { cursor: pointer; list-style: none; }
+    .skills summary::-webkit-details-marker { display: none; }
+    .skills label {
+      display: flex; gap: 8px; align-items: flex-start;
+      margin-top: 9px; font-size: 0.88rem; color: var(--muted);
+    }
+    .skills input { accent-color: var(--accent); margin-top: 2px; }
+    .actions { margin: 12px 0 0; padding: 0; list-style: none; }
+    .actions li {
+      padding: 10px 0; border-top: 1px solid var(--line-soft); font-size: 0.9rem;
+    }
+    .actions .why { display: block; margin-top: 3px; color: var(--muted); font-size: 0.84rem; }
+    .actions .chan {
+      display: block; margin-top: 4px;
+      font-family: var(--mono); font-size: 0.72rem; color: var(--accent);
+    }
+    .chip.hint { cursor: default; color: var(--muted); }
+    .imagery-pick { display: flex; align-items: center; gap: 8px; }
+    .imagery-pick select { font-size: 0.78rem; padding: 5px 7px; max-width: 15rem; }
+  </style>
+</head>
+<body>
+  <div class="shell" id="shell" data-mode="simple">
+
+    <aside class="rail" id="rail">
+      <div class="rail-head">
+        <div class="brand">Vue<span>·</span>Locale</div>
+        <button class="btn-ghost" id="lang">English</button>
+      </div>
+
+      <div class="zone-pick">
+        <label for="zone-select" id="zone-label" class="block h3"></label>
+        <select id="zone-select"></select>
+      </div>
+
+      <!-- 1. Am I in danger, how far, how urgently. -->
+      <div class="answer" id="answer" aria-live="polite">
+        <span class="tag" id="tag"><i></i><span id="tag-text"></span></span>
+        <h2 id="headline">Chargement…</h2>
+        <p id="subline"></p>
+      </div>
+
+      <dl class="facts" id="facts"></dl>
+
+      <!-- 2. Where is it going. -->
+      <div class="block" id="spread-block" hidden>
+        <h3 id="spread-title">Où le feu se dirige</h3>
+        <p class="verdict" id="spread-verdict"></p>
+        <ul id="spread-arcs"></ul>
+        <p id="spread-caveat"></p>
+      </div>
+
+      <!-- 3. Where must I not go. -->
+      <div class="block" id="avoid-block">
+        <h3 id="avoid-title">Où ne pas aller</h3>
+        <p id="avoid-note"></p>
+        <ul id="avoid-list"></ul>
+      </div>
+
+      <!-- 4. Who is fighting it. An observation, never a claim about the
+           response — and the ground note is unconditional. -->
+      <div class="block" id="forces-block">
+        <h3 id="forces-title">Moyens visibles</h3>
+        <p id="forces-air"></p>
+        <p id="forces-ground"></p>
+      </div>
+
+      <!-- 5. What can I do. -->
+      <div class="block skills" id="skills-block">
+        <details id="skills-details">
+          <summary id="skills-summary">Ce que je peux faire</summary>
+          <div id="skills-list"></div>
+        </details>
+        <ul class="actions" id="actions"></ul>
+      </div>
+
+      <div class="official" id="alert-box">
+        <p id="alert-text"></p>
+        <a id="alert-link" href="https://www.interieur.gouv.fr/Alerte/FR-Alert" rel="noopener"></a>
+      </div>
+
+      <div class="rail-foot">
+        <span class="live" id="freshness"><i></i><span id="freshness-text">Chargement…</span></span>
+        <a href="./" id="back-link">Carte France</a>
+        <a href="sources.html" id="src-link">Sources</a>
+      </div>
+    </aside>
+
+    <div class="map">
+      <div id="map"></div>
+
+      <div class="toolbar" id="toolbar">
+        <button class="chip" data-layer="fires" aria-pressed="true">
+          <i class="sw fire"></i><span>Feux détectés</span>
+        </button>
+        <button class="chip" data-layer="spread" aria-pressed="true">
+          <i class="sw hist"></i><span>Propagation modélisée</span>
+        </button>
+        <button class="chip" data-layer="closures" aria-pressed="true">
+          <i class="sw road"></i><span>Routes coupées</span>
+        </button>
+        <button class="chip" data-layer="detail" aria-pressed="true">
+          <i class="sw sat"></i><span>Bâtiments et rues</span>
+        </button>
+
+        <span class="chip hint" id="detail-hint" hidden></span>
+
+        <div class="imagery-pick">
+          <select id="imagery" aria-label="Image satellite">
+            <option value="">Aucune image</option>
+          </select>
+        </div>
+
+        <div class="seg basemap" id="basemap" role="group" aria-label="Fond de carte">
+          <button data-base="plan_ign" aria-pressed="true">Plan IGN</button>
+          <button data-base="imagery" aria-pressed="false">Satellite</button>
+          <button data-base="plain" aria-pressed="false">Sobre</button>
+        </div>
+      </div>
+
+      <div class="scrubber" id="scrubber" hidden>
+        <div class="scrub-head">
+          <span id="scrub-label">Date de l'image</span><b id="scrub-date"></b>
+        </div>
+        <input type="range" id="scrub" min="0" max="21" value="0" step="1">
+        <div class="scrub-foot"><span id="scrub-note"></span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="../js/local-page.js"></script>
+</body>
+</html>
