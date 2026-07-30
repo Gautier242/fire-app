@@ -11,7 +11,7 @@ from pathlib import Path
 from build import registry
 from build.http import make_session
 from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis, cwfis_history, opensky
-from build.sources.fr import arome, atmo, evac, firms, mdf, terrain, water, wind
+from build.sources.fr import arome, atmo, evac, firms, firms_history, mdf, terrain, water, wind
 from build.sources.fr import roads as fr_roads
 from build import fire_spread, flares, zone_build, zones
 
@@ -426,6 +426,22 @@ def main():
             out, "water.json", lambda: water.normalize(water.fetch(session)))
         if water_layer:
             print(f"wrote {out / 'water.json'} ({len(water_layer.get('points', []))} water points)")
+
+        # Seven days of detections, so a reader can see where the fire has already
+        # been. A side file, not a summary section: it is 3 MB of bulk CSV per
+        # build, and a timeout on it must never be able to block the danger map.
+        shapes_path = Path("public/static/fr/departements.geojson")
+        trail = write_side_file(out, "history.json", lambda: firms_history.normalize(
+            firms_history.fetch(session),
+            now=datetime.now(timezone.utc),
+            shapes=json.loads(shapes_path.read_text()) if shapes_path.exists() else None,
+            registry=flares.FlareRegistry.from_payload(previous_flares)))
+        if trail:
+            passes = len({point[2] for point in trail["points"]})
+            print(f"wrote {out / 'history.json'} ({len(trail['points'])} detections "
+                  f"across {passes} observed passes, newest {trail['generated_at']})")
+        else:
+            print("WARNING: the 7-day trail is unavailable; the previous file keeps serving")
 
     if country == "ca":
         history = write_history(out, lambda: cwfis_history.normalize(cwfis_history.fetch(session)))
