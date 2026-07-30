@@ -70,9 +70,16 @@ const HOUR_MS = 60 * 60 * 1000;
 // if nobody ever reads it again. Reads do not depend on it.
 const lifetimeSeconds = () => Math.ceil(LIMITS.recordLifetimeMs / 1000);
 
-const json = (status, payload) => new Response(JSON.stringify(payload), {
+// no-store by default. Only the public board opts out, and only briefly: every
+// other response either carries a contact line or is a refusal, and neither
+// should sit in a cache anywhere.
+const json = (status, payload, headers = {}) => new Response(JSON.stringify(payload), {
   status,
-  headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  headers: {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    ...headers,
+  },
 });
 
 export async function handle(request, ctx) {
@@ -172,6 +179,7 @@ function tooMany(ctx) {
     status: 429,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
       'Retry-After': String(Math.ceil(untilNextHour / 1000)),
     },
   });
@@ -281,7 +289,16 @@ async function board(request, ctx) {
     .filter((r) => r.published)
     .filter((r) => Object.entries(wanted).every(([field, values]) => values.includes(r[field])))
     .map(publicView);
-  return json(200, { records: shown, truncated, cap: LIMITS.readCap });
+  // Thirty seconds. Every reader of the map hits this, and one board read costs a
+  // KV list plus one get per record, so an uncached board is the expensive part of
+  // running this. Short enough that a scam post a moderator has just deleted does
+  // not outlive the deletion by long.
+  //
+  // ponytail: relies on the browser and any shared cache honouring this. If read
+  // volume ever actually bites, put caches.default in front of the KV read inside
+  // the Worker, or keep one denormalised board blob rewritten on each publish.
+  return json(200, { records: shown, truncated, cap: LIMITS.readCap },
+    { 'Cache-Control': 'public, max-age=30' });
 }
 
 async function queue(request, ctx) {

@@ -507,3 +507,26 @@ test('the global write limit stays inside one moderator\'s throughput', () => {
     `${LIMITS.writesPerHourGlobal} writes an hour is ${Math.round(workSecondsPerHour / 60)} `
     + 'minutes of moderation per hour; a single moderator needs it under 40');
 });
+
+test('the moderation queue is never cached, the public board briefly is', async () => {
+  const c = ctx();
+  await published(c);
+
+  // The queue is the one response carrying a contact line. Nothing between the
+  // moderator and the Worker may keep a copy of it.
+  const queue = await handle(get('/api/queue', { token: TOKEN }), c);
+  assert.match(queue.headers.get('Cache-Control'), /no-store/);
+
+  // The board is public and read on every page load, so a short shared cache is
+  // what keeps this affordable. It also bounds how long a deleted scam post can
+  // survive in a cache, which is why the window is seconds and not minutes.
+  const board = await handle(get('/api/board'), c);
+  const cache = board.headers.get('Cache-Control');
+  assert.match(cache, /max-age=(\d+)/);
+  assert.ok(Number(cache.match(/max-age=(\d+)/)[1]) <= 60);
+
+  // A refusal must never be cached as though it were the board.
+  const refused = await handle(get('/api/board?area=99'), c);
+  assert.equal(refused.status, 422);
+  assert.match(refused.headers.get('Cache-Control') || 'no-store', /no-store/);
+});
