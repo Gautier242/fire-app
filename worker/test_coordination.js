@@ -36,6 +36,14 @@ function get(path, { token } = {}) {
 
 const body = async (response) => await response.json();
 
+// Submit and review in one step, for tests about what happens after review.
+async function published(c, record = OFFER) {
+  const { id } = await body(await handle(post('/api/submit', record), c));
+  const response = await handle(post('/api/review', { id, action: 'publish' }, { token: TOKEN }), c);
+  assert.equal(response.status, 200);
+  return id;
+}
+
 test('an oversized body is refused before it is even parsed', async () => {
   const c = ctx();
   const huge = JSON.stringify({ ...OFFER, text: 'a'.repeat(6000) });
@@ -172,4 +180,43 @@ test('a submission is accepted but not published', async () => {
   const queue = await body(await handle(get('/api/queue', { token: TOKEN }), c));
   assert.equal(queue.records.length, 1);
   assert.equal(queue.records[0].published, false, 'default state must be unpublished');
+});
+
+test('review is what puts a record on the board', async () => {
+  const c = ctx();
+  const id = await published(c);
+
+  const board = await body(await handle(get('/api/board'), c));
+  assert.equal(board.records.length, 1);
+  assert.equal(board.records[0].id, id);
+
+  const queue = await body(await handle(get('/api/queue', { token: TOKEN }), c));
+  assert.deepEqual(queue.records, [], 'a reviewed record is still waiting in the queue');
+});
+
+test('a rejected record is deleted, not merely hidden', async () => {
+  const c = ctx();
+  const { id } = await body(await handle(post('/api/submit', OFFER), c));
+  assert.equal((await handle(post('/api/review', { id, action: 'reject' }, { token: TOKEN }), c)).status, 200);
+
+  assert.deepEqual((await body(await handle(get('/api/board'), c))).records, []);
+  assert.deepEqual((await body(await handle(get('/api/queue', { token: TOKEN }), c))).records, []);
+  assert.equal(await c.store.get(`rec:${id}`), null, "a refused stranger's contact line was kept");
+});
+
+test('review refuses anything but a moderator making a known decision', async () => {
+  const c = ctx();
+  const { id } = await body(await handle(post('/api/submit', OFFER), c));
+  const cases = [
+    [post('/api/review', { id, action: 'publish' }), 401],
+    [post('/api/review', { id, action: 'publish' }, { token: 'wrong' }), 401],
+    [post('/api/review', { id, action: 'delete-everything' }, { token: TOKEN }), 422],
+    [post('/api/review', { id: 'not-a-real-id', action: 'publish' }, { token: TOKEN }), 404],
+    [post('/api/review', { action: 'publish' }, { token: TOKEN }), 422],
+  ];
+  for (const [request, expected] of cases) {
+    assert.equal((await handle(request, c)).status, expected);
+  }
+  // Through all of that it stayed unpublished.
+  assert.deepEqual((await body(await handle(get('/api/board'), c))).records, []);
 });

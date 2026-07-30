@@ -78,6 +78,9 @@ export async function handle(request, ctx) {
     if (pathname === '/api/queue') {
       return method === 'GET' ? await queue(request, ctx) : json(405, { error: 'method' });
     }
+    if (pathname === '/api/review') {
+      return method === 'POST' ? await review(request, ctx) : json(405, { error: 'method' });
+    }
     return json(404, { error: 'no such endpoint' });
   } catch (err) {
     // Any doubt about a write ends here, before it reached storage.
@@ -200,6 +203,41 @@ async function queue(request, ctx) {
   if (refusal) return refusal;
   const records = (await readRecords(ctx)).filter((r) => !r.published);
   return json(200, { records });
+}
+
+// The human decision. Publishing is the only way onto the board; rejecting
+// deletes, because there is no reason to keep a refused stranger's contact line.
+async function review(request, ctx) {
+  const refusal = moderatorRefusal(request, ctx);
+  if (refusal) return refusal;
+
+  const raw = await request.text();
+  if (byteLength(raw) > LIMITS.bodyBytes) return json(413, { error: 'too large' });
+  let posted;
+  try {
+    posted = JSON.parse(raw);
+  } catch {
+    return json(400, { error: 'not json' });
+  }
+  if (!posted || typeof posted.id !== 'string' || !posted.id) return json(422, { error: 'id required' });
+  if (posted.action !== 'publish' && posted.action !== 'reject') {
+    return json(422, { error: 'action must be publish or reject' });
+  }
+
+  const key = RECORD + posted.id;
+  const record = await ctx.store.get(key);
+  if (!record) return json(404, { error: 'no such record' });
+
+  if (posted.action === 'reject') {
+    await ctx.store.delete(key);
+    return json(200, { id: posted.id, published: false, deleted: true });
+  }
+
+  record.published = true;
+  record.publishedAt = ctx.now();
+  record.provenance = { ...record.provenance, reviewedAt: ctx.now() };
+  await ctx.store.put(key, record, { ttlSeconds: Math.ceil(LIMITS.recordLifetimeMs / 1000) });
+  return json(200, { id: posted.id, published: true });
 }
 
 // A missing token is a closed door, not an open one: an unconfigured deployment
