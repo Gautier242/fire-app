@@ -65,7 +65,8 @@ const COPY = {
     evacList: (n) => `${n} commune(s) évacuée(s), en tout ou partie.`,
     evacSource: 'Source : Département de la Gironde. Les ordres d\'évacuation partent aussi par FR-Alert, directement sur votre téléphone.',
     evacUnavailable: 'Liste des communes évacuées indisponible. Cela ne veut pas dire qu\'il n\'y a aucun ordre.',
-    burntArea: (km2) => `${km2} km² déjà brûlés (relevé du Département).`,
+    burntArea: (km2, when) => `${km2} km² déjà brûlés`
+      + (when ? ` (relevé du Département du ${when}).` : ' (relevé du Département).'),
     trailChip: 'Chaleur sur 7 jours',
     trailUnavailable: 'Historique 7 jours indisponible.',
     dayLabel: 'Jour', dayAll: '7 jours',
@@ -110,7 +111,8 @@ const COPY = {
     evacList: (n) => `${n} commune(s) evacuated, wholly or partly.`,
     evacSource: 'Source: Gironde département. Evacuation orders also go out over FR-Alert, straight to your phone.',
     evacUnavailable: 'The evacuated commune list is unavailable. That does not mean there is no order.',
-    burntArea: (km2) => `${km2} km² already burnt (département survey).`,
+    burntArea: (km2, when) => `${km2} km² already burnt`
+      + (when ? ` (département survey of ${when}).` : ' (département survey).'),
     trailChip: 'Heat over 7 days',
     trailUnavailable: 'The 7-day history is unavailable.',
     dayLabel: 'Day', dayAll: '7 days',
@@ -223,7 +225,14 @@ function renderAvoid(closures) {
     }
     if (local.evacuations.length) notes.push(c().evacList(local.evacuations.length));
     if (local.burn_area && local.burn_area.area_km2) {
-      notes.push(c().burntArea(local.burn_area.area_km2));
+      // The survey date, not today's date. The departement names each perimeter
+      // for the day it walked the ground, and a three-day-old outline shown without
+      // its date reads as the fire's current edge.
+      const when = local.burn_area.surveyed
+        ? new Date(`${local.burn_area.surveyed}T00:00:00Z`).toLocaleDateString(
+          lang === 'en' ? 'en-GB' : 'fr-FR', { day: 'numeric', month: 'long' })
+        : null;
+      notes.push(c().burntArea(local.burn_area.area_km2, when));
     }
   } else if (official === false) {
     // Could not ask. This must never render as open roads.

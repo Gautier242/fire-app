@@ -227,3 +227,52 @@ def test_a_real_bend_in_a_road_survives_simplification():
 
     assert len(out["closures"][0]["geometry"]["coordinates"]) == 60, (
         "44 m of real deviation is a corner, not noise")
+
+
+def test_the_burn_perimeter_layer_is_discovered_rather_than_hardcoded():
+    """The departement names each perimeter for its survey date.
+
+    Observed titles: emprise_27_07_26, and an earlier ec_26_07_26_8h. So the day a
+    new survey lands, a hardcoded emprise_27_07_26 keeps returning the old polygon
+    and the map shows a three-day-old burn as if it were current -- stale data
+    wearing a fresh timestamp, which is worse than no polygon.
+    """
+    catalogue = {"results": [
+        {"title": "emprise_27_07_26", "url": "https://x/services/emprise_27_07_26/FeatureServer",
+         "modified": 1000},
+        {"title": "emprise_29_07_26", "url": "https://x/services/emprise_29_07_26/FeatureServer",
+         "modified": 3000},
+        {"title": "communes_evacuees", "url": "https://x/services/communes_evacuees/FeatureServer",
+         "modified": 4000},
+    ]}
+
+    found = gironde.newest_burn_layer(catalogue)
+
+    # The layer index is appended, matching the other layer constants.
+    assert found["url"] == "https://x/services/emprise_29_07_26/FeatureServer/0"
+    # The survey date is read from the title so the interface can say how old the
+    # perimeter is rather than implying it is live.
+    assert found["surveyed"] == "2026-07-29"
+
+
+def test_an_undiscoverable_perimeter_falls_back_without_inventing_a_date():
+    assert gironde.newest_burn_layer(None) is None
+    assert gironde.newest_burn_layer({"results": []}) is None
+    # A title that does not carry a parseable date is still usable as a layer, but
+    # must not be given a made-up survey date.
+    odd = {"results": [{"title": "emprise_finale", "url": "https://x/e/FeatureServer",
+                        "modified": 1}]}
+    assert gironde.newest_burn_layer(odd)["surveyed"] is None
+
+
+def test_the_payload_reports_when_the_perimeter_was_surveyed():
+    burn = {"type": "Feature", "properties": {"Shape_Area": 405170600.0},
+            "geometry": {"type": "Polygon",
+                         "coordinates": [[[-1.2, 44.8], [-1.0, 44.8],
+                                          [-1.0, 45.0], [-1.2, 44.8]]]}}
+
+    out = gironde.normalize({"burn": {"features": [burn]},
+                             "burn_surveyed": "2026-07-27"},
+                            now="2026-07-30T12:00:00Z")
+
+    assert out["burn_area"]["surveyed"] == "2026-07-27"

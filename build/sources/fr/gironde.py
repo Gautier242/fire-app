@@ -33,6 +33,8 @@ because that departement is burning, and it may be withdrawn when the fire ends.
 the interface. A failed fetch that renders as an empty road layer tells a reader the
 roads are open when we have no idea.
 """
+import re
+
 from build.http import get_json
 from build.simplify import rdp, simplify_polygons
 
@@ -45,8 +47,50 @@ ROAD_LAYERS = (f"{BASE}/ec_agol_vue/FeatureServer/3",
                f"{BASE}/ec_agol_vue/FeatureServer/2")
 DETOUR_LAYER = f"{BASE}/ec_agol_vue/FeatureServer/1"
 EVAC_LAYER = f"{BASE}/communes_evacuees/FeatureServer/0"
-# Dated in its own name, so a new fire means a new layer rather than an update.
+# The perimeter is named for the day it was surveyed -- emprise_27_07_26, after an
+# earlier ec_26_07_26_8h -- so this is a fallback, not the answer. Hardcoding it
+# means that the day a new survey lands we keep serving the old polygon and show a
+# days-old burn as if it were current. The newest layer is discovered instead, and
+# the survey date reaches the interface so it can say how old the perimeter is.
 BURN_LAYER = f"{BASE}/emprise_27_07_26/FeatureServer/0"
+SEARCH_URL = "https://www.arcgis.com/sharing/rest/search"
+BURN_OWNER = "o.mougel"
+_BURN_DATE = re.compile(r"(\d{2})_(\d{2})_(\d{2})")
+
+
+def find_burn_layer(session):
+    """The département's newest burn perimeter, by asking rather than assuming."""
+    try:
+        catalogue = get_json(session, SEARCH_URL, params={
+            "q": f'owner:{BURN_OWNER} AND type:"Feature Service"',
+            "num": 40, "f": "json", "sortField": "modified", "sortOrder": "desc"})
+    except Exception:  # noqa: BLE001 - the fallback URL still works
+        return None
+    return newest_burn_layer(catalogue)
+
+
+def newest_burn_layer(catalogue):
+    """Pick the most recent `emprise_*` service out of a search response.
+
+    Chosen on the date in the title rather than on `modified`: the title is the day
+    the ground was surveyed, and `modified` only says when somebody last touched the
+    record. A title with no parseable date is still usable as a layer, but gets no
+    invented survey date -- absence beats a fabricated one.
+    """
+    best = None
+    for item in (catalogue or {}).get("results") or []:
+        title = item.get("title") or ""
+        if not title.lower().startswith("emprise") or not item.get("url"):
+            continue
+        match = _BURN_DATE.search(title)
+        surveyed = None
+        if match:
+            day, month, year = match.groups()
+            surveyed = f"20{year}-{month}-{day}"
+        rank = (surveyed or "", item.get("modified") or 0)
+        if best is None or rank > best[0]:
+            best = (rank, {"url": f"{item['url']}/0", "surveyed": surveyed})
+    return best[1] if best else None
 
 # Today's counts on a live incident were 24 + 212 roads and 20 communes. The cap is
 # generous against that and exists because those are today's numbers, not a limit.
@@ -136,9 +180,14 @@ def fetch(session, cap=MAX_FEATURES):
             continue
     out["roads"] = {"features": roads} if road_ok else None
 
+    # Ask which perimeter is current before fetching one.
+    found = find_burn_layer(session)
+    burn_url = found["url"] if found else BURN_LAYER
+    out["burn_surveyed"] = found["surveyed"] if found else None
+
     for key, url in (("detours", DETOUR_LAYER),
                      ("evacuations", EVAC_LAYER),
-                     ("burn", BURN_LAYER)):
+                     ("burn", burn_url)):
         try:
             out[key] = get_json(session, f"{url}/query", params=params)
         except Exception:  # noqa: BLE001 - a missing layer is not a missing map
@@ -269,6 +318,9 @@ def normalize(payload, now, cap=MAX_FEATURES):
             # service fighting the fire, so it has nothing to validate and draws
             # solid. A reader must be able to tell which one they are looking at.
             "observed": True,
+            # When the ground was surveyed, so the interface can age it rather than
+            # imply the perimeter is live. None when the layer name carries no date.
+            "surveyed": payload.get("burn_surveyed"),
             "area_km2": round(area / 1e6, 1) if isinstance(area, (int, float)) else None,
             "geometry": _simplify_area(burn[0]["geometry"]),
             "source": "gironde",
