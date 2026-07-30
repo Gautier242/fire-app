@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vue opérationnelle — Feux près de moi</title>
+  <meta name="description" content="Surface pour les intervenants : les chiffres du modèle de propagation avec leur incertitude chiffrée, et ce que nos sources ne voient pas.">
+  <!-- Not a public page. Unlinked on purpose, and kept out of search results
+       until the owner decides it should exist. -->
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="../css/app.css">
+  <style>
+    /* Page-scoped. Everything else reuses app.css. */
+    .zone-pick { padding: 0 20px 14px; }
+    .zone-pick select { width: 100%; }
+    select {
+      font-family: var(--sans); font-size: 0.9rem;
+      color: var(--ink); background: var(--raised);
+      border: 1px solid var(--line); border-radius: var(--r);
+      padding: 8px 10px;
+    }
+    .block { padding: 14px 20px; border-top: 1px solid var(--line-soft); }
+    .block[hidden] { display: none; }
+    .block h3 {
+      margin: 0 0 8px; font-family: var(--mono); font-size: 0.67rem;
+      text-transform: uppercase; letter-spacing: 0.11em; color: var(--faint);
+      font-weight: 500;
+    }
+    .block p { margin: 0 0 6px; font-size: 0.86rem; color: var(--muted); }
+    .block ul { margin: 0; padding-left: 18px; font-size: 0.82rem; color: var(--muted); }
+    .block li { margin-bottom: 7px; }
+
+    /* The header says what this surface is before anything else does. A reader who
+       landed here by accident must not take a modelled number for an observation. */
+    .pro-head { padding: 16px 20px 12px; }
+    .pro-head h2 { margin: 0 0 4px; font-size: 1.05rem; }
+    .pro-head p { margin: 0; font-size: 0.82rem; color: var(--muted); }
+    .badge {
+      display: inline-block; margin-top: 8px;
+      font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em;
+      color: var(--danger); border: 1px solid var(--danger); border-radius: var(--r);
+      padding: 3px 7px;
+    }
+
+    /* One card per fire rather than a table: a phone in a vehicle cannot scroll a
+       twelve-column table sideways. */
+    .fire {
+      padding: 10px 0; border-top: 1px solid var(--line-soft);
+    }
+    .cell { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+    .cell .k {
+      font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--faint);
+    }
+    .cell .v { font-size: 0.84rem; color: var(--ink); text-align: right; }
+    /* Modelled rows are visually set apart as well as marked, so the difference
+       between observed and modelled survives a glance. */
+    .cell.modelled .v { color: var(--muted); font-style: italic; }
+    .legend {
+      margin: 10px 0 0; font-size: 0.76rem; color: var(--faint);
+      border-top: 1px dashed var(--line); padding-top: 8px;
+    }
+    #closures-list { list-style: none; padding: 0; }
+    #closures-list li {
+      padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 0.84rem;
+    }
+    #closures-list .state {
+      display: block; margin-top: 3px; font-family: var(--mono);
+      font-size: 0.7rem; color: var(--accent);
+    }
+    #closures-list .dates {
+      display: block; margin-top: 2px; font-size: 0.76rem; color: var(--faint);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell" id="shell" data-mode="simple">
+
+    <aside class="rail" id="rail">
+      <div class="rail-head">
+        <div class="brand">Vue<span>·</span>Ops</div>
+        <button class="btn-ghost" id="lang">English</button>
+      </div>
+
+      <div class="pro-head">
+        <h2 id="page-title">Vue opérationnelle</h2>
+        <p id="page-sub">Chiffres modélisés avec leur incertitude. Pas une surface publique.</p>
+        <span class="badge" id="model-badge">validated=false</span>
+      </div>
+
+      <div class="zone-pick">
+        <label for="zone-select" id="zone-label" class="block h3"></label>
+        <select id="zone-select"></select>
+      </div>
+
+      <!-- What the model is worth, before any number it produces. -->
+      <div class="block" id="model-block">
+        <h3 id="model-title">Ce que vaut le modèle</h3>
+        <ul id="model-notes"></ul>
+      </div>
+
+      <!-- Every fire in the zone with its modelled figures, each one marked. -->
+      <div class="block" id="triage-block">
+        <h3 id="triage-title">Foyers</h3>
+        <p id="triage-empty" hidden></p>
+        <div id="triage-body"></div>
+        <p class="legend" id="legend"></p>
+      </div>
+
+      <!-- The three things we cannot see. The ground-unit line is unconditional:
+           it renders whatever the aircraft count is. -->
+      <div class="block" id="resources-block">
+        <h3 id="resources-title">Ce que nous ne voyons pas</h3>
+        <p id="water-note"></p>
+        <p id="ground-note"></p>
+        <p id="air-note"></p>
+      </div>
+
+      <!-- Cuts, including ones not yet in force, dated. The public map excludes
+           those; a responder planning a route needs them. -->
+      <div class="block" id="closures-block">
+        <h3 id="closures-title">Coupures du réseau national</h3>
+        <p id="closures-note"></p>
+        <ul id="closures-list"></ul>
+      </div>
+
+      <div class="rail-foot">
+        <span class="live" id="freshness"><i></i><span id="freshness-text">Chargement…</span></span>
+        <a href="./" id="back-link">Carte France</a>
+        <a href="sources.html" id="src-link">Sources</a>
+      </div>
+    </aside>
+
+    <div class="map">
+      <div id="map"></div>
+
+      <div class="toolbar" id="toolbar">
+        <button class="chip" data-layer="fires" aria-pressed="true">
+          <i class="sw fire"></i><span>Chaleur détectée</span>
+        </button>
+        <!-- Dashed, always. A modelled wedge must never look observed. -->
+        <button class="chip" data-layer="spread" aria-pressed="true">
+          <i class="sw hist"></i><span>Propagation modélisée †</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="../js/pro-page.js"></script>
+</body>
+</html>
