@@ -492,3 +492,18 @@ test('the oldest waiting record is always the one a moderator can reach', async 
   const { records } = await body(await handle(get('/api/board'), reversed));
   assert.deepEqual(records.map((r) => r.text), ['offre 1', 'offre 2', 'offre 3']);
 });
+
+test('the global write limit stays inside one moderator\'s throughput', () => {
+  // The owner accepted "build it, I'll moderate" — one person. Nothing may reach
+  // a public surface unreviewed, so the sustained inflow the code permits has to
+  // be an inflow one human can clear, or the queue grows without bound until the
+  // 48-hour expiry silently drops needs nobody ever read.
+  //
+  // Twenty seconds to read a short post, judge it and decide. This constant is
+  // the assumption to revisit, not the arithmetic.
+  const SECONDS_PER_ITEM = 20;
+  const workSecondsPerHour = LIMITS.writesPerHourGlobal * SECONDS_PER_ITEM;
+  assert.ok(workSecondsPerHour <= 40 * 60,
+    `${LIMITS.writesPerHourGlobal} writes an hour is ${Math.round(workSecondsPerHour / 60)} `
+    + 'minutes of moderation per hour; a single moderator needs it under 40');
+});

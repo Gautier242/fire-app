@@ -14,7 +14,12 @@ export const LIMITS = {
   textChars: 280,
   contactChars: 120,
   writesPerIpPerHour: 5,
-  writesPerHourGlobal: 200,
+  // Derived, not chosen: nothing reaches a public surface unreviewed, so the
+  // sustained inflow this code permits must be an inflow one moderator can clear.
+  // At 20 seconds to read and judge a post, 120 an hour is 40 minutes of work per
+  // hour. 200 would be 67 minutes per hour — a queue that grows for as long as the
+  // flood lasts. Raising this needs a second moderator, not a bigger number.
+  writesPerHourGlobal: 120,
   reviewsPerHour: 600,
   recordLifetimeMs: 48 * 60 * 60 * 1000,
   readCap: 200,
