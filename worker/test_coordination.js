@@ -233,3 +233,36 @@ test(`the moderator path is itself capped at ${LIMITS.reviewsPerHour} an hour, i
   // it is a ceiling on a stolen token, not on the human.
   assert.ok(LIMITS.reviewsPerHour > LIMITS.writesPerHourGlobal);
 });
+
+test('a record disappears from every read once it expires', async () => {
+  const c = ctx();
+  await published(c);
+  assert.equal((await body(await handle(get('/api/board'), c))).records.length, 1);
+
+  c.at = T0 + LIMITS.recordLifetimeMs - 1;
+  assert.equal((await body(await handle(get('/api/board'), c))).records.length, 1,
+    'expired an hour early');
+
+  c.at = T0 + LIMITS.recordLifetimeMs;
+  assert.deepEqual((await body(await handle(get('/api/board'), c))).records, [],
+    'a stale offer of shelter is worse than none');
+});
+
+test('an unreviewed record expires out of the moderation queue as well', async () => {
+  const c = ctx();
+  await handle(post('/api/submit', OFFER), c);
+  assert.equal((await body(await handle(get('/api/queue', { token: TOKEN }), c))).records.length, 1);
+
+  c.at = T0 + LIMITS.recordLifetimeMs;
+  assert.deepEqual((await body(await handle(get('/api/queue', { token: TOKEN }), c))).records, [],
+    'a moderator was asked to review something already dead');
+});
+
+test('an expired record cannot be published back into life', async () => {
+  const c = ctx();
+  const { id } = await body(await handle(post('/api/submit', OFFER), c));
+  c.at = T0 + LIMITS.recordLifetimeMs;
+  const response = await handle(post('/api/review', { id, action: 'publish' }, { token: TOKEN }), c);
+  assert.equal(response.status, 404);
+  assert.deepEqual((await body(await handle(get('/api/board'), c))).records, []);
+});

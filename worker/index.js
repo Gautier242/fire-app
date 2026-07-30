@@ -61,6 +61,10 @@ const byteLength = (text) => new TextEncoder().encode(text).length;
 
 const HOUR_MS = 60 * 60 * 1000;
 
+// The storage-level TTL, so an abandoned record leaves the store on its own even
+// if nobody ever reads it again. Reads do not depend on it.
+const lifetimeSeconds = () => Math.ceil(LIMITS.recordLifetimeMs / 1000);
+
 const json = (status, payload) => new Response(JSON.stringify(payload), {
   status,
   headers: { 'Content-Type': 'application/json; charset=utf-8' },
@@ -128,8 +132,8 @@ async function submit(request, ctx) {
     expiresAt: ctx.now() + LIMITS.recordLifetimeMs,
     provenance: { via: 'public-form' },
   };
-  await ctx.store.put(RECORD + record.id, record);
-  return json(202, { id: record.id, published: false });
+  await ctx.store.put(RECORD + record.id, record, { ttlSeconds: lifetimeSeconds() });
+  return json(202, { id: record.id, published: false, expiresAt: record.expiresAt });
 }
 
 // A fixed hourly window: the counter for the current hour, incremented, refused
@@ -190,8 +194,14 @@ function refuse(posted) {
   return null;
 }
 
+// Expiry is decided here, against the injected clock, and not left to the store:
+// KV drops a key on its own schedule and can serve one that has just fallen due.
+// A record at or past its expiry is treated as absent by every read path.
+const live = (record, ctx) => record && record.expiresAt > ctx.now();
+
 async function readRecords(ctx) {
-  return await ctx.store.list(RECORD, LIMITS.readCap);
+  const all = await ctx.store.list(RECORD, LIMITS.readCap);
+  return all.filter((record) => live(record, ctx));
 }
 
 async function board(ctx) {
@@ -233,7 +243,7 @@ async function review(request, ctx) {
 
   const key = RECORD + posted.id;
   const record = await ctx.store.get(key);
-  if (!record) return json(404, { error: 'no such record' });
+  if (!live(record, ctx)) return json(404, { error: 'no such record' });
 
   if (posted.action === 'reject') {
     await ctx.store.delete(key);
@@ -243,7 +253,7 @@ async function review(request, ctx) {
   record.published = true;
   record.publishedAt = ctx.now();
   record.provenance = { ...record.provenance, reviewedAt: ctx.now() };
-  await ctx.store.put(key, record, { ttlSeconds: Math.ceil(LIMITS.recordLifetimeMs / 1000) });
+  await ctx.store.put(key, record, { ttlSeconds: lifetimeSeconds() });
   return json(200, { id: posted.id, published: true });
 }
 
