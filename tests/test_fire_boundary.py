@@ -4,7 +4,7 @@ The thing under test is a claim about ground truth, so most of these are
 honesty tests rather than geometry tests: what the module refuses to draw
 matters more than what it draws.
 """
-from build.fire_boundary import METHOD, boundaries
+from build.fire_boundary import MAX_POINTS, MAX_VERTICES, METHOD, boundaries
 
 
 def incident(identifier, points):
@@ -86,6 +86,56 @@ def test_a_boundary_from_three_detections_is_distinguishable_from_one_from_many(
     big = boundaries([incident("b", dense)])[0]
     assert small["detections"] == 3
     assert big["detections"] == 64
+
+
+def ring_of(count, lon=-1.20, lat=44.98, radius=0.05, hour=10):
+    """`count` detections on a circle, so every one of them is a hull vertex."""
+    from math import cos, radians, sin
+    return [[lon + radius * sin(radians(360.0 * i / count)),
+             lat + radius * cos(radians(360.0 * i / count)),
+             f"2026-07-30T{hour:02d}:00:00Z"] for i in range(count)]
+
+
+def test_the_vertex_count_respects_the_cap():
+    out = boundaries([incident("a", ring_of(200))], max_vertices=12)
+    assert len(out[0]["ring"]) <= 12
+    assert out[0]["simplified"] is True
+
+
+def test_an_uncapped_ring_is_not_marked_simplified():
+    out = boundaries([incident("a", square(-1.20, 44.98))])
+    assert out[0]["simplified"] is False
+    assert len(out[0]["ring"]) <= MAX_VERTICES
+
+
+def test_a_simplified_ring_still_encloses_area():
+    # A cap that collapsed the ring to a line would silently delete the fire.
+    ring = boundaries([incident("a", ring_of(200))], max_vertices=4)[0]["ring"]
+    assert len(ring) >= 3
+    assert len(set(map(tuple, ring))) == len(ring), "duplicate positions in ring"
+
+
+def test_input_points_are_capped_and_the_truncation_is_declared():
+    out = boundaries([incident("a", ring_of(50))], max_points=10)
+    assert out[0]["detections"] == 10
+    assert out[0]["truncated"] is True
+
+
+def test_an_uncapped_boundary_is_not_marked_truncated():
+    out = boundaries([incident("a", square(-1.20, 44.98))])
+    assert out[0]["truncated"] is False
+    assert MAX_POINTS > 1000, "the cap is a fuse, not a tuning knob"
+
+
+def test_a_zero_point_cap_draws_nothing_rather_than_everything():
+    assert boundaries([incident("a", ring_of(50))], max_points=0) == []
+
+
+def test_the_cap_keeps_the_most_recent_detections():
+    old = [[-1.30 + i * 0.01, 44.90, "2026-07-30T02:00:00Z"] for i in range(4)]
+    recent = square(-1.20, 44.98, hour=18)
+    out = boundaries([incident("a", old + recent)], max_points=4)
+    assert out[0]["first_seen"] == "2026-07-30T18:00:00Z"
 
 
 def test_rows_that_do_not_parse_are_skipped_rather_than_raised():
