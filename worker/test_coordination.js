@@ -103,6 +103,45 @@ test('ordinary French wording that merely counts things is accepted', async () =
   }
 });
 
+test(`one address gets ${LIMITS.writesPerIpPerHour} writes an hour and no more`, async () => {
+  const c = ctx();
+  for (let i = 0; i < LIMITS.writesPerIpPerHour; i += 1) {
+    const response = await handle(post('/api/submit', OFFER), c);
+    assert.equal(response.status, 202, `write ${i + 1} of the allowance was refused`);
+  }
+  const overrun = await handle(post('/api/submit', OFFER), c);
+  assert.equal(overrun.status, 429);
+  assert.ok(overrun.headers.get('Retry-After'), 'a refusal must say when to come back');
+
+  // The limit is per address, not a global freeze on everybody else.
+  const neighbour = await handle(post('/api/submit', OFFER, { ip: '203.0.113.10' }), c);
+  assert.equal(neighbour.status, 202);
+
+  // And it lifts.
+  c.at += 60 * 60 * 1000;
+  assert.equal((await handle(post('/api/submit', OFFER), c)).status, 202);
+});
+
+test(`the whole channel gets ${LIMITS.writesPerHourGlobal} writes an hour, across all addresses`, async () => {
+  const c = ctx();
+  const perIp = LIMITS.writesPerIpPerHour;
+  for (let i = 0; i < LIMITS.writesPerHourGlobal; i += 1) {
+    const ip = `198.51.100.${Math.floor(i / perIp)}`;
+    const response = await handle(post('/api/submit', OFFER, { ip }), c);
+    assert.equal(response.status, 202, `global write ${i + 1} was refused early`);
+  }
+  // A fresh address with its whole personal allowance intact is still refused.
+  const fresh = await handle(post('/api/submit', OFFER, { ip: '198.51.100.240' }), c);
+  assert.equal(fresh.status, 429);
+});
+
+test('a submission with no client address is refused, because it cannot be rate-limited', async () => {
+  const c = ctx();
+  const response = await handle(post('/api/submit', OFFER, { ip: null }), c);
+  assert.equal(response.status, 400);
+  assert.equal(c.store._size(), 0);
+});
+
 test('the moderation queue is unreachable without the moderator token', async () => {
   const c = ctx();
   await handle(post('/api/submit', OFFER), c);

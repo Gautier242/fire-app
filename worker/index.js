@@ -58,6 +58,8 @@ const STREET_ADDRESS = /\b\d{1,4}\s*(bis|ter)?\s*(rue|avenue|av|boulevard|bd|che
 
 const byteLength = (text) => new TextEncoder().encode(text).length;
 
+const HOUR_MS = 60 * 60 * 1000;
+
 const json = (status, payload) => new Response(JSON.stringify(payload), {
   status,
   headers: { 'Content-Type': 'application/json; charset=utf-8' },
@@ -84,6 +86,11 @@ export async function handle(request, ctx) {
 }
 
 async function submit(request, ctx) {
+  // No address means no way to hold anyone to a limit, so there is no way to
+  // accept this safely.
+  const ip = request.headers.get('CF-Connecting-IP');
+  if (!ip) return json(400, { error: 'no client address' });
+
   const raw = await request.text();
   if (byteLength(raw) > LIMITS.bodyBytes) return json(413, { error: 'too large' });
 
@@ -100,6 +107,11 @@ async function submit(request, ctx) {
   const refusal = refuse(posted);
   if (refusal) return json(422, { error: refusal });
 
+  // Per address first, so one abuser spends their own allowance before the
+  // channel's. Both are checked before the record is built or stored.
+  if (!await within(ctx, `ip:${ip}`, LIMITS.writesPerIpPerHour)) return tooMany(ctx);
+  if (!await within(ctx, 'all', LIMITS.writesPerHourGlobal)) return tooMany(ctx);
+
   const record = {
     id: crypto.randomUUID(),
     kind: posted.kind,
@@ -114,6 +126,37 @@ async function submit(request, ctx) {
   };
   await ctx.store.put(RECORD + record.id, record);
   return json(202, { id: record.id, published: false });
+}
+
+// A fixed hourly window: the counter for the current hour, incremented, refused
+// once it passes the limit. Over the limit it is not written back, so a flood
+// cannot inflate it further.
+//
+// ponytail: fixed window, so an attacker straddling the boundary gets 2x the
+// allowance in a couple of minutes. A sliding window needs per-key ordering that
+// eventually consistent KV cannot give; move both counters to a Durable Object if
+// the burst ever matters. The same consistency limit means concurrent writes in
+// different colos can undercount — the numbers below are a ceiling on sustained
+// rate, not a hard cap on a simultaneous burst.
+async function within(ctx, key, limit) {
+  const hour = Math.floor(ctx.now() / HOUR_MS);
+  const slot = `rl:${hour}:${key}`;
+  const seen = await ctx.store.get(slot);
+  const used = (seen && seen.n) || 0;
+  if (used + 1 > limit) return false;
+  await ctx.store.put(slot, { n: used + 1 }, { ttlSeconds: 2 * 3600 });
+  return true;
+}
+
+function tooMany(ctx) {
+  const untilNextHour = HOUR_MS - (ctx.now() % HOUR_MS);
+  return new Response(JSON.stringify({ error: 'rate limit' }), {
+    status: 429,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Retry-After': String(Math.ceil(untilNextHour / 1000)),
+    },
+  });
 }
 
 // Returns the reason to refuse, or null. Every doubt is a refusal: a submission
