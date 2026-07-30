@@ -106,7 +106,7 @@ def water_in_zone(zone, layer, exclude_crowd=False):
 
 
 def write_zone(out, zone, fires, wind_rows, terrain, spread=None, closures=None,
-               official_perimeter=False, water=None, hydrants=None):
+               official_perimeter=False, water=None):
     """Write one zone's detail file and return the payload.
 
     `official_perimeter` says somebody whose job it is has already mapped the
@@ -133,12 +133,15 @@ def write_zone(out, zone, fires, wind_rows, terrain, spread=None, closures=None,
         # Always present, empty when a real perimeter exists or when the detections
         # are too sparse to enclose anything honestly.
         "boundaries": [] if official_perimeter else fire_boundary.boundaries(near),
-        # Two keys, never one total. A register is complete for its area, so
-        # absence inside one means something; OSM absence means nobody mapped
-        # that street. Null when the layer never loaded, which the frontend
-        # reads as unknown rather than as none.
+        # The register only. Null when it never loaded, which the frontend reads
+        # as unknown rather than as none.
+        #
+        # The crowd layer deliberately stays out: this file is fetched by the
+        # public local view, and 2,992 OSM hydrants inside the Gironde radius
+        # take it from 2.9 KB gzipped to 40.0 KB. Only the responder page reads
+        # them, hydrants.json is 52 KB, and that page fetches it off the
+        # critical path already.
         "water": water_in_zone(zone, water, exclude_crowd=True),
-        "hydrants": water_in_zone(zone, hydrants),
     }
     _write(Path(out) / f"{zone['id']}.json", payload)
     return payload

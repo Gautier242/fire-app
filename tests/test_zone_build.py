@@ -249,33 +249,39 @@ def test_a_crowd_point_never_enters_the_register_block():
     assert [p["id"] for p in block["points"]] == ["surveyed"]
 
 
-def test_a_zone_file_carries_both_water_layers_separately(tmp_path):
-    """Register and crowd travel as two keys, never one total.
-
-    pro.html reads them with two functions that answer different questions: a
-    register is complete for its area, so absence inside one means something,
-    while OSM absence means nobody mapped that street.
-    """
+def test_a_zone_file_carries_the_register_narrowed_to_its_radius(tmp_path):
     zone = {"id": "gironde", "lat": 44.84, "lon": -0.58, "radius_km": 50}
     water = {"points": [{"id": "r", "lat": 44.85, "lon": -0.60, "dep": "33",
+                         "tier": "register"},
+                        {"id": "far", "lat": 43.60, "lon": 3.90, "dep": "34",
                          "tier": "register"}],
              "coverage": [{"dep": "33", "area": "Gironde",
                            "scope": "departement", "count": 1,
                            "tier": "register"}]}
-    hydrants = {"points": [{"id": "h", "lat": 44.85, "lon": -0.60,
-                            "tier": "crowd"}],
-                "coverage": [], "available": True, "truncated": False}
 
-    payload = write_zone(tmp_path, zone, [], [], None, water=water,
-                         hydrants=hydrants)
+    payload = write_zone(tmp_path, zone, [], [], None, water=water)
 
     assert [p["id"] for p in payload["water"]["points"]] == ["r"]
-    assert [p["id"] for p in payload["hydrants"]["points"]] == ["h"]
     assert json.loads((tmp_path / "gironde.json").read_text())["water"]
 
 
+def test_the_crowd_layer_stays_out_of_the_zone_file(tmp_path):
+    """This file is on the public evacuation path; the crowd layer is not.
+
+    zone.html fetches it to draw the local view. The 2,992 OSM hydrants inside
+    the Gironde radius take it from 2.9 KB gzipped to 40.0 KB, and only the
+    responder page ever reads them -- from hydrants.json, which is 52 KB and
+    already fetched off that page's critical path.
+    """
+    zone = {"id": "gironde", "lat": 44.84, "lon": -0.58, "radius_km": 50}
+
+    payload = write_zone(tmp_path, zone, [], [], None)
+
+    assert "hydrants" not in payload
+
+
 def test_a_zone_written_without_water_says_unknown_not_empty(tmp_path):
-    """The keys are always present, and null is the honest value for absent.
+    """The key is always present, and null is the honest value for absent.
 
     A missing key and an empty list are different failures downstream, and here
     the third state matters most: the build could not read the register at all.
@@ -285,7 +291,6 @@ def test_a_zone_written_without_water_says_unknown_not_empty(tmp_path):
     payload = write_zone(tmp_path, zone, [], [], None)
 
     assert payload["water"] is None
-    assert payload["hydrants"] is None
 
 
 def test_a_crowd_hydrant_cannot_reach_the_register_key(tmp_path):

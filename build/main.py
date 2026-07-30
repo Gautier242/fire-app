@@ -231,8 +231,7 @@ def _median_slope(grid):
     return values[len(values) // 2] if values else None
 
 
-def _build_zones(summary, session, out, wildfires, surveyed=(),
-                 water_layer=None, hydrant_layer=None):
+def _build_zones(summary, session, out, wildfires, surveyed=(), water_layer=None):
     """Pre-build detail files for today's hot zones.
 
     Every zone is independent and its failure is contained: the browser can fetch
@@ -285,7 +284,7 @@ def _build_zones(summary, session, out, wildfires, surveyed=(),
                                   terrain=None, spread=projections,
                                   closures=summary.get("closures"),
                                   official_perimeter=zone["id"] in surveyed,
-                                  water=water_layer, hydrants=hydrant_layer)
+                                  water=water_layer)
             built.append(zone)
         except Exception:  # noqa: BLE001 - one bad zone must not lose the others
             continue
@@ -421,8 +420,7 @@ def apply_france_extras(summary, session, out, previous_flares):
     # falls back to a computed hull instead of leaving the ground unmapped.
     surveyed = {"gironde"} if (local and local.get("burn_area")) else set()
 
-    _build_zones(summary, session, out, wildfires, surveyed,
-                 water_layer=register, hydrant_layer=crowd)
+    _build_zones(summary, session, out, wildfires, surveyed, water_layer=register)
 
     # Aircraft are matched against real wildfires only. An aircraft circling a
     # refinery flare is not fighting a fire.

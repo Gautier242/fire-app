@@ -424,6 +424,7 @@ const LANG_KEY = 'fire-near-me.fr.lang';
 let lang = 'fr';
 let zone = null;
 let summary = null;
+let hydrants = null;
 let crowdNote = null;
 let view = null;
 
@@ -494,8 +495,7 @@ function renderResources() {
     crowdNote = el('p', 'crowd');
     $('water-note').insertAdjacentElement('afterend', crowdNote);
   }
-  crowdNote.textContent = crowdWaterStatement(
-    { zone, hydrants: zone && zone.hydrants, lang }).text;
+  crowdNote.textContent = crowdWaterStatement({ zone, hydrants, lang }).text;
   // Unconditional, and rendered before the aircraft line so an aircraft count can
   // never be the last word on who is on the ground.
   $('ground-note').textContent = groundStatement({ lang });
@@ -592,6 +592,14 @@ async function boot() {
     loadJSON('data/summary.json').catch(() => null),
   ]);
   summary = loaded;
+
+  // 52 KB of crowd-mapped hydrants, fetched here rather than folded into the
+  // zone file: that file is on the public evacuation path and 2,992 of these
+  // inside the Gironde radius would take it from 2.9 KB gzipped to 40.0 KB.
+  // Off the critical path, so it never blocks the numbers a responder came for,
+  // and until it lands the crowd line reads as unavailable rather than as none.
+  loadJSON('data/hydrants.json').then((h) => { hydrants = h; if (zone) renderResources(); })
+    .catch(() => { hydrants = null; });
 
   const select = $('zone-select');
   for (const z of index.zones || []) {

@@ -140,26 +140,32 @@ test('the page never adds a register count to a crowd count', () => {
   assert.match(source, /crowd/, 'the page must know about the crowd tier');
 });
 
-test('both layers come from the zone file, not from the national registers', () => {
+test('the register comes from the zone file, not from the national file', () => {
   // The registers are 9.1 MB of coordinates and this page draws no water
   // marker: every point existed to produce one sentence naming a count. The
   // build now narrows them to the zone radius, so fetching the whole file here
   // again would restore the download without changing a word on the page.
+  //
+  // hydrants.json is deliberately still fetched: it is 52 KB, and folding it
+  // into the zone file would put 2,992 crowd points on the public local view,
+  // which fetches the same file to draw the evacuation map.
   const source = readFileSync('public/js/pro-page.js', 'utf8');
 
-  assert.doesNotMatch(source, /data\/water\.json|data\/hydrants\.json/);
+  assert.doesNotMatch(source, /data\/water\.json/);
+  assert.match(source, /data\/hydrants\.json/);
 });
 
-test('a zone written before the water keys existed reads as unknown', () => {
+test('a zone written before the water key existed reads as unknown', () => {
   // Zone files are cached in readers' browsers. Across the deploy that moved
   // the register into them, somebody holds a zone from before the key existed.
   // Undefined has to reach the same statement a failed fetch does, because the
-  // alternative renders as a surveyed zero.
+  // alternative renders as a surveyed zero. The crowd layer is in the same
+  // state for a different reason: its fetch has simply not landed yet.
   for (const lang of LANGS) {
     const stale = { ...ZONE };
 
     const register = waterStatement({ zone: stale, water: stale.water, lang });
-    const crowd = crowdWaterStatement({ zone: stale, hydrants: stale.hydrants, lang });
+    const crowd = crowdWaterStatement({ zone: stale, hydrants: null, lang });
 
     assert.equal(register.visible, null, 'unknown must not be a count');
     assert.equal(crowd.visible, null, 'unknown must not be a count');
