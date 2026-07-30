@@ -249,6 +249,63 @@ def test_a_crowd_point_never_enters_the_register_block():
     assert [p["id"] for p in block["points"]] == ["surveyed"]
 
 
+def test_a_zone_file_carries_both_water_layers_separately(tmp_path):
+    """Register and crowd travel as two keys, never one total.
+
+    pro.html reads them with two functions that answer different questions: a
+    register is complete for its area, so absence inside one means something,
+    while OSM absence means nobody mapped that street.
+    """
+    zone = {"id": "gironde", "lat": 44.84, "lon": -0.58, "radius_km": 50}
+    water = {"points": [{"id": "r", "lat": 44.85, "lon": -0.60, "dep": "33",
+                         "tier": "register"}],
+             "coverage": [{"dep": "33", "area": "Gironde",
+                           "scope": "departement", "count": 1,
+                           "tier": "register"}]}
+    hydrants = {"points": [{"id": "h", "lat": 44.85, "lon": -0.60,
+                            "tier": "crowd"}],
+                "coverage": [], "available": True, "truncated": False}
+
+    payload = write_zone(tmp_path, zone, [], [], None, water=water,
+                         hydrants=hydrants)
+
+    assert [p["id"] for p in payload["water"]["points"]] == ["r"]
+    assert [p["id"] for p in payload["hydrants"]["points"]] == ["h"]
+    assert json.loads((tmp_path / "gironde.json").read_text())["water"]
+
+
+def test_a_zone_written_without_water_says_unknown_not_empty(tmp_path):
+    """The keys are always present, and null is the honest value for absent.
+
+    A missing key and an empty list are different failures downstream, and here
+    the third state matters most: the build could not read the register at all.
+    """
+    zone = {"id": "landes", "lat": 44.0, "lon": -0.77, "radius_km": 50}
+
+    payload = write_zone(tmp_path, zone, [], [], None)
+
+    assert payload["water"] is None
+    assert payload["hydrants"] is None
+
+
+def test_a_crowd_hydrant_cannot_reach_the_register_key(tmp_path):
+    """The separation is enforced at the boundary, not left to the frontend.
+
+    If the two files were ever merged upstream, the register count on the
+    responder page must still not move.
+    """
+    zone = {"id": "gironde", "lat": 44.84, "lon": -0.58, "radius_km": 50}
+    polluted = {"points": [{"id": "r", "lat": 44.85, "lon": -0.60,
+                            "tier": "register"},
+                           {"id": "osm", "lat": 44.85, "lon": -0.60,
+                            "tier": "crowd"}],
+                "coverage": []}
+
+    payload = write_zone(tmp_path, zone, [], [], None, water=polluted)
+
+    assert [p["id"] for p in payload["water"]["points"]] == ["r"]
+
+
 def test_the_crowd_layer_keeps_its_own_availability_flag():
     """crowdWaterStatement reads `available` to say "we could not ask".
 
