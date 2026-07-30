@@ -233,9 +233,7 @@ const COPY = {
     water_p: "La défense extérieure contre l'incendie est une compétence des communes, encadrée par un règlement départemental : chaque SDIS tient son propre registre, il n'y a aucune autorité nationale et donc aucun fichier national. Nous n'utilisons que les registres réellement publiés et lisibles.",
     water_share: (points) => `Cela fait ${points} points d'eau, soit environ 7 % des quelque 800 000 points estimés en France. Un pompier qui ne voit pas de point d'eau ne doit surtout pas en conclure qu'il n'y en a pas.`,
     water_capacity: "La capacité est presque toujours inconnue : la plupart des registres publient un débit en m³/h, pas un volume stocké. Un débit n'est jamais converti en volume, et un volume inconnu — ou publié à zéro — reste affiché comme inconnu. Envoyer une équipe vers une citerne que la carte disait pleine est l'erreur qui compte ici.",
-    water_btn: "Afficher les zones réellement couvertes",
-    water_btn_loading: 'Chargement du registre…',
-    water_note: "Le fichier des points d'eau est gros ; il n'est chargé que si vous le demandez.",
+    water_loading: 'Chargement du registre…',
     water_head: (n, points) => `${n} zones couvertes, ${points} points`,
     water_failed: (msg) => `Impossible de charger le registre des points d'eau : ${msg}`,
     scope_dep: 'Département entier', scope_local: 'Secteur local',
@@ -371,9 +369,7 @@ const COPY = {
     water_p: 'Fire water supply is a communal responsibility under a departmental règlement: each SDIS keeps its own register, there is no national authority and therefore no national dataset. We use only the registers actually published and readable.',
     water_share: (points) => `That is ${points} water points, roughly 7% of France’s estimated 800,000. A firefighter who sees no water point must not conclude there is none.`,
     water_capacity: 'Capacity is almost always unknown: most registers publish a flow rate in m³/h, not a stored volume. Flow is never converted into volume, and an unknown volume — or one published as zero — stays shown as unknown. Sending a crew to a tank the map called full is the failure that matters here.',
-    water_btn: 'Show the areas actually covered',
-    water_btn_loading: 'Loading the register…',
-    water_note: 'The water-point file is large; it is only loaded if you ask for it.',
+    water_loading: 'Loading the register…',
     water_head: (n, points) => `${n} areas covered, ${points} points`,
     water_failed: (msg) => `Could not load the water-point register: ${msg}`,
     scope_dep: 'Whole département', scope_local: 'Local area',
@@ -405,7 +401,7 @@ let summary = null;
 let flares = null;
 let water = null;
 let zone = null;       // one pre-built zone, for the local view's live numbers
-let waterState = '';   // '', 'loading', or an error message
+let waterState = 'loading';   // 'loading', '', or an error message
 
 const c = () => COPY[lang === 'en' ? 'en' : 'fr'];
 
@@ -606,18 +602,22 @@ function renderLocal() {
 
 /* ---------------- 2. what it cannot do ---------------- */
 
+// How many water points the registers hold, nationally. Summed from the
+// coverage rows because water.json no longer ships the points themselves —
+// every row counts exactly the points it contributed, so the sum is the total.
+// Null until the file lands: inventing a count here would be the exact failure
+// this page exists to prevent.
+function waterTotal() {
+  return water ? (water.coverage || []).reduce((sum, a) => sum + (a.count || 0), 0) : null;
+}
+
 function renderWaterCoverage() {
-  if (waterState === 'loading') return `<div class="prose"><p>${esc(c().water_btn_loading)}</p></div>`;
+  if (waterState === 'loading') return `<div class="prose"><p>${esc(c().water_loading)}</p></div>`;
   if (waterState) return `<div class="prose"><p class="bad" style="color:var(--caution)">${esc(c().water_failed(waterState))}</p></div>`;
-  if (!water) {
-    return `<div class="prose">
-        <p>${esc(c().water_note)}</p>
-        <p><button class="btn-ghost" data-water>${esc(c().water_btn)}</button></p>
-      </div>`;
-  }
+  if (!water) return '';
 
   const coverage = water.coverage || [];
-  const total = coverage.reduce((sum, a) => sum + (a.count || 0), 0);
+  const total = waterTotal();
   const rows = coverage.map((a) => `
       <div class="fact area">
         <dt><b>${esc(a.dep || '—')}</b> ${esc(a.area || '—')}<br>
@@ -634,9 +634,7 @@ function renderCannot() {
   const cur = (summary && summary.evacuation_curation) || {};
   const deps = cur.departements || [];
   const evacuations = (summary && summary.evacuations) || [];
-  // Null until the register is actually loaded. Inventing a count here would be
-  // the exact failure this page exists to prevent.
-  const points = water ? (water.points || []).length : null;
+  const points = waterTotal();
 
   const block = (h, p) => `<h3>${esc(c()[h])}</h3><p>${esc(c()[p])}</p>`;
 
@@ -742,26 +740,20 @@ function render() {
   $('generated').textContent = c().generated(summary.generated_at || '?');
 }
 
-// The register is several megabytes — far more than the rest of the page — so it
-// is fetched only when a reader asks for the covered areas.
-function loadWater() {
-  if (water || waterState === 'loading') return;
-  waterState = 'loading';
-  render();
-  fetch('data/water.json', { cache: 'no-cache' })
-    .then((r) => { if (!r.ok) throw new Error(`water.json: ${r.status}`); return r.json(); })
-    .then((data) => { water = data; waterState = ''; render(); })
-    .catch((error) => { waterState = error.message; render(); });
-}
+// The coverage statement, which is all this file now carries: 0.36 KB against
+// the 9.1 MB of coordinates it used to ship to a page that draws no map. Small
+// enough to load with everything else, so the reader no longer has to ask.
+// A failure keeps its own state rather than falling through to an empty list,
+// which would read as no register covering anywhere in France.
+fetch('data/water.json', { cache: 'no-cache' })
+  .then((r) => { if (!r.ok) throw new Error(`water.json: ${r.status}`); return r.json(); })
+  .then((data) => { water = data; waterState = ''; render(); })
+  .catch((error) => { waterState = error.message; render(); });
 
 $('lang').addEventListener('click', () => {
   lang = lang === 'en' ? 'fr' : 'en';
   store(LANG_KEY, lang);
   render();
-});
-
-$('content').addEventListener('click', (event) => {
-  if (event.target.closest('[data-water]')) loadWater();
 });
 
 render();
