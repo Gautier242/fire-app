@@ -94,6 +94,10 @@ const COPY = {
       covered: (n, from) => `${n} point(s) d’eau publiés dans ce rayon, registre ${from}. Un registre n’est pas une garantie de débit ni d’accès.`,
       unknown: 'Couverture des points d’eau inconnue : le fichier n’a pas été chargé. Ne pas lire cela comme une absence d’eau.',
       scopes: (dep, loc) => `${dep} registre(s) à l’échelle d’un département entier, ${loc} à l’échelle d’une commune ou d’une métropole.`,
+      // Le cinquième état, à côté des quatre ci-dessus et jamais à leur place :
+      // une source bénévole, comptée séparément et jamais additionnée.
+      crowd: (n) => `${n} bouche(s) d’incendie cartographiée(s) par OpenStreetMap dans ce rayon. Ce n’est pas un registre : personne ne garantit que la liste soit complète, et l’absence de point n’est pas la même chose que l’absence d’eau.`,
+      crowdUnavailable: 'Couche OpenStreetMap indisponible : nous n’avons pas pu interroger la base. Ce n’est pas l’absence d’eau.',
     },
     ground: 'Aucune position d’unité au sol, jamais. Les 22 jeux de données SDIS sur data.gouv sont des budgets et des périmètres, aucun n’est en temps réel, et OpenStreetMap ne connaît que 4 casernes dans toute l’emprise Gironde contre une centaine réelles. Ce vide est celui de nos sources, pas celui du terrain.',
     air: {
@@ -137,6 +141,10 @@ const COPY = {
       covered: (n, from) => `${n} water point(s) published in this radius, ${from} register. A register is no guarantee of flow or of access.`,
       unknown: 'Water-point coverage unknown: the file did not load. Do not read that as the absence of water.',
       scopes: (dep, loc) => `${dep} register(s) at whole-département scale, ${loc} at commune or métropole scale.`,
+      // The fifth state, beside the four above and never in place of one: a
+      // volunteer source, counted separately and never added to a register.
+      crowd: (n) => `${n} fire hydrant(s) mapped by OpenStreetMap in this radius. This is not a register: nobody guarantees the list is complete, and no point shown is not the same as no water.`,
+      crowdUnavailable: 'OpenStreetMap layer unavailable: we could not query the database. That is not the absence of water.',
     },
     ground: 'No ground-unit position, ever. The 22 SDIS datasets on data.gouv are budgets and boundaries, none is real-time, and OpenStreetMap knows only 4 fire stations in the whole Gironde bbox against roughly 100 real ones. That gap is in our sources, not on the ground.',
     air: {
@@ -308,8 +316,12 @@ export function waterStatement({ zone, water, lang = 'fr' } = {}) {
 
   const centre = zone && Number.isFinite(zone.lat) ? zone : null;
   const radius = (zone && zone.radius_km) || 50;
+  // Register points only. The crowd layer ships in its own file today, but the
+  // rule is that no code path sums the two, not that no file mixes them: a
+  // volunteer-mapped dot must never inflate the number that reads as coverage.
   const near = centre
-    ? ((water.points || []).filter((p) => haversineKm(centre, p) <= radius))
+    ? ((water.points || []).filter((p) => p.tier !== 'crowd'
+        && haversineKm(centre, p) <= radius))
     : [];
 
   if (!near.length) {
@@ -337,6 +349,33 @@ export function waterStatement({ zone, water, lang = 'fr' } = {}) {
       ? `${c.water.covered(near.length, from)} ${scopes}`
       : `${c.water.spill(near.length, areaList, from)} ${scopes}`,
   };
+}
+
+/**
+ * Crowd-sourced hydrants for the same zone, as their own count.
+ *
+ * Deliberately a second function rather than a branch inside waterStatement:
+ * there is no shared total to compute, and the two answer different questions. A
+ * register is complete for its area, so absence inside one means something. Here
+ * absence means nobody has mapped that street — the same OSM extract holds 4 fire
+ * stations in the Gironde bbox against roughly 100 real ones.
+ *
+ * `visible` is null rather than 0 when the layer could not be consulted. A layer
+ * we could not ask is not a layer that answered nothing.
+ */
+export function crowdWaterStatement({ zone, hydrants, lang = 'fr' } = {}) {
+  const c = t(lang);
+  // Overpass answering 504, or the file never loading, mean the same thing to
+  // somebody looking for water: we could not ask, and that is not an answer.
+  if (!hydrants || hydrants.available === false) {
+    return { visible: null, available: false, text: c.water.crowdUnavailable };
+  }
+  const centre = zone && Number.isFinite(zone.lat) ? zone : null;
+  const radius = (zone && zone.radius_km) || 50;
+  const near = centre
+    ? ((hydrants.points || []).filter((p) => haversineKm(centre, p) <= radius))
+    : [];
+  return { visible: near.length, available: true, text: c.water.crowd(near.length) };
 }
 
 /** Unconditional. Never gated on an aircraft count or on anything else. */
@@ -386,6 +425,8 @@ let lang = 'fr';
 let zone = null;
 let summary = null;
 let water = null;
+let hydrants = null;
+let crowdNote = null;
 let view = null;
 
 function load(key) {
@@ -444,6 +485,14 @@ function renderResources() {
   const c = t(lang);
   $('resources-title').textContent = c.resourcesTitle;
   $('water-note').textContent = waterStatement({ zone, water, lang }).text;
+  // Its own line, immediately beneath the register line and never merged into
+  // it. Created here rather than in the markup so the two counts cannot end up
+  // in one element by an edit to the page.
+  if (!crowdNote) {
+    crowdNote = el('p', 'crowd');
+    $('water-note').insertAdjacentElement('afterend', crowdNote);
+  }
+  crowdNote.textContent = crowdWaterStatement({ zone, hydrants, lang }).text;
   // Unconditional, and rendered before the aircraft line so an aircraft count can
   // never be the last word on who is on the ground.
   $('ground-note').textContent = groundStatement({ lang });
@@ -545,6 +594,12 @@ async function boot() {
   // Until it lands the water line reads as unknown, not as no water.
   loadJSON('data/water.json').then((w) => { water = w; if (zone) renderResources(); })
     .catch(() => { water = null; });
+
+  // Loaded beside the registers, never into them. A failure here leaves the
+  // register line untouched and says the crowd layer is unavailable, which is
+  // not the same statement as no water.
+  loadJSON('data/hydrants.json').then((h) => { hydrants = h; if (zone) renderResources(); })
+    .catch(() => { hydrants = null; });
 
   const select = $('zone-select');
   for (const z of index.zones || []) {
