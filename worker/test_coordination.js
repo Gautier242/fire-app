@@ -36,6 +36,73 @@ function get(path, { token } = {}) {
 
 const body = async (response) => await response.json();
 
+test('an oversized body is refused before it is even parsed', async () => {
+  const c = ctx();
+  const huge = JSON.stringify({ ...OFFER, text: 'a'.repeat(6000) });
+  assert.ok(huge.length > LIMITS.bodyBytes);
+  const response = await handle(post('/api/submit', huge), c);
+  assert.equal(response.status, 413);
+  assert.equal(c.store._size(), 0, 'an oversized body reached storage');
+});
+
+test('a malformed submission is rejected and persists nothing', async () => {
+  const cases = {
+    'not json at all': 'kind=offer&text=hello',
+    'a json array': '[]',
+    'no kind': { ...OFFER, kind: undefined },
+    'an invented kind': { ...OFFER, kind: 'command' },
+    'an invented category': { ...OFFER, category: 'weapons' },
+    'no category': { ...OFFER, category: undefined },
+    'empty text': { ...OFFER, text: '   ' },
+    'text past the limit': { ...OFFER, text: 'a'.repeat(LIMITS.textChars + 1) },
+    'a contact past the limit': { ...OFFER, contact: 'a'.repeat(LIMITS.contactChars + 1) },
+    'no area': { ...OFFER, area: undefined },
+    'a postcode where a departement belongs': { ...OFFER, area: '33260' },
+    'an invented departement': { ...OFFER, area: '99' },
+    'a non-string text': { ...OFFER, text: { fr: 'bonjour' } },
+    'an unknown field': { ...OFFER, published: true },
+    'a smuggled payment field': { ...OFFER, iban: 'FR7630006000011234567890189' },
+  };
+  for (const [name, payload] of Object.entries(cases)) {
+    const c = ctx();
+    const response = await handle(post('/api/submit', payload), c);
+    assert.ok(response.status === 400 || response.status === 422,
+      `${name} was answered ${response.status}`);
+    assert.equal(c.store._size(), 0, `${name} persisted something`);
+  }
+});
+
+test('a request for money or credentials is refused, in either language', async () => {
+  const scams = [
+    'Hebergement disponible, envoyez 200 EUR par virement pour reserver.',
+    'Shelter available, send payment via PayPal first.',
+    'Donnez-moi votre mot de passe France Connect et je fais la demande pour vous.',
+    'Transport possible, paiement en bitcoin uniquement.',
+    'Je peux vous aider, envoyez votre numero de carte bancaire.',
+  ];
+  for (const text of scams) {
+    const c = ctx();
+    const response = await handle(post('/api/submit', { ...OFFER, text }), c);
+    assert.equal(response.status, 422, `not refused: ${text}`);
+    assert.equal(c.store._size(), 0, `persisted: ${text}`);
+  }
+});
+
+test('a street address is refused so nobody publishes their own front door', async () => {
+  const c = ctx();
+  const response = await handle(post('/api/submit', { ...OFFER, text: 'Venez au 12 rue des Ecoles, il y a de la place.' }), c);
+  assert.equal(response.status, 422);
+  assert.equal(c.store._size(), 0);
+});
+
+test('ordinary French wording that merely counts things is accepted', async () => {
+  for (const text of ['J\'ai 4 places dans ma voiture.', '2 routes sont coupees, je connais un detour.', 'Piscine de 30 m3 utilisable.']) {
+    const c = ctx();
+    const response = await handle(post('/api/submit', { ...OFFER, text }), c);
+    assert.equal(response.status, 202, `wrongly refused: ${text}`);
+  }
+});
+
 test('the moderation queue is unreachable without the moderator token', async () => {
   const c = ctx();
   await handle(post('/api/submit', OFFER), c);
