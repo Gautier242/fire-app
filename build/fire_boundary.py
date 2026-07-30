@@ -45,6 +45,13 @@ PIXEL_M = 375
 MAX_POINTS = 5000
 MAX_VERTICES = 64
 
+# What counts as a hole in the record rather than the ordinary wait between
+# overpasses. Measured 2026-07-29: five VIIRS passes over France in 24 h across
+# both satellites, so roughly five hours is normal cadence. Longer than six and
+# a pass was missed or cloud blocked it, and detections either side of it belong
+# to two observations, not one continuous burn.
+MAX_GAP_HOURS = 6.0
+
 
 def _stamp(value):
     try:
@@ -71,6 +78,18 @@ def _points(incident):
         if stamp is not None:
             out.append((lon, lat, stamp))
     return sorted(out, key=lambda p: p[2])
+
+
+def _windows(points, max_gap_hours):
+    """Cut the run of detections wherever the record has a hole in it."""
+    windows = []
+    for point in points:
+        if windows and (point[2] - windows[-1][-1][2]).total_seconds() \
+                <= max_gap_hours * 3600.0:
+            windows[-1].append(point)
+        else:
+            windows.append([point])
+    return windows
 
 
 def _area2(a, b, c):
@@ -136,12 +155,13 @@ def _hull(points):
     return ring if len(ring) >= 3 else []
 
 
-def _boundary(incident, points, max_vertices, truncated):
+def _boundary(incident, points, index, max_vertices, truncated):
     ring, simplified = _cap_ring(_hull(points), max_vertices)
     if len(ring) < 3:
         return None
     first, last = points[0][2], points[-1][2]
     return {
+        "id": f"{incident.get('id')}#{index}",
         "incident_id": incident.get("id"),
         "method": METHOD,
         # Derived, never observed. The frontend must be able to tell without
@@ -160,8 +180,13 @@ def _boundary(incident, points, max_vertices, truncated):
     }
 
 
-def boundaries(incidents, max_points=MAX_POINTS, max_vertices=MAX_VERTICES):
-    """One ring per incident, biggest detection count first."""
+def boundaries(incidents, max_points=MAX_POINTS, max_vertices=MAX_VERTICES,
+               max_gap_hours=MAX_GAP_HOURS):
+    """One ring per observation window per incident, most detections first.
+
+    An incident yields several rings when its detections straddle a gap in the
+    record, and none at all when no window of it encloses area.
+    """
     out = []
     for incident in incidents or ():
         points = _points(incident)
@@ -170,7 +195,8 @@ def boundaries(incidents, max_points=MAX_POINTS, max_vertices=MAX_VERTICES):
         truncated = len(points) > max_points
         # Not points[-max_points:]: at a cap of zero that slice keeps everything.
         points = points[len(points) - max_points:] if truncated else points
-        boundary = _boundary(incident, points, max_vertices, truncated)
-        if boundary is not None:
-            out.append(boundary)
+        for index, window in enumerate(_windows(points, max_gap_hours)):
+            boundary = _boundary(incident, window, index, max_vertices, truncated)
+            if boundary is not None:
+                out.append(boundary)
     return sorted(out, key=lambda b: -b["detections"])

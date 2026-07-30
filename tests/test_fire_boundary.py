@@ -4,7 +4,8 @@ The thing under test is a claim about ground truth, so most of these are
 honesty tests rather than geometry tests: what the module refuses to draw
 matters more than what it draws.
 """
-from build.fire_boundary import MAX_POINTS, MAX_VERTICES, METHOD, boundaries
+from build.fire_boundary import (MAX_GAP_HOURS, MAX_POINTS, MAX_VERTICES,
+                                 METHOD, boundaries)
 
 
 def incident(identifier, points):
@@ -136,6 +137,44 @@ def test_the_cap_keeps_the_most_recent_detections():
     recent = square(-1.20, 44.98, hour=18)
     out = boundaries([incident("a", old + recent)], max_points=4)
     assert out[0]["first_seen"] == "2026-07-30T18:00:00Z"
+
+
+def test_detections_spanning_a_cloud_gap_do_not_become_one_boundary():
+    # Same ground, seen at 04:00 and again at 20:00. Nothing was observed in
+    # between. One ring stamped 04:00 to 20:00 asserts the fire held that shape
+    # for sixteen hours, which no satellite saw.
+    points = square(-1.20, 44.98, hour=4) + square(-1.20, 44.98, size=0.02, hour=20)
+    out = boundaries([incident("lacanau", points)])
+    assert len(out) == 2
+    for boundary in out:
+        assert boundary["span_hours"] < MAX_GAP_HOURS
+    assert {b["first_seen"] for b in out} == {"2026-07-30T04:00:00Z",
+                                             "2026-07-30T20:00:00Z"}
+    assert len({b["id"] for b in out}) == 2, "two rings cannot share one id"
+
+
+def test_one_overpass_stays_one_boundary():
+    points = square(-1.20, 44.98, hour=10)
+    points[2] = [points[2][0], points[2][1], "2026-07-30T10:12:00Z"]
+    assert len(boundaries([incident("a", points)])) == 1
+
+
+def test_a_window_too_thin_to_enclose_area_contributes_nothing():
+    # The 20:00 pass caught two pixels. It gets no ring of its own, and it must
+    # not be folded into the 10:00 ring to make one.
+    points = square(-1.20, 44.98, hour=10) + [
+        [-1.20, 44.98, "2026-07-30T20:00:00Z"],
+        [-1.19, 44.98, "2026-07-30T20:05:00Z"]]
+    out = boundaries([incident("a", points)])
+    assert len(out) == 1
+    assert out[0]["detections"] == 4
+    assert out[0]["last_seen"] == "2026-07-30T10:00:00Z"
+
+
+def test_the_gap_is_the_callers_to_set():
+    points = square(-1.20, 44.98, hour=10) + square(-1.20, 44.98, size=0.02, hour=13)
+    assert len(boundaries([incident("a", points)], max_gap_hours=6)) == 1
+    assert len(boundaries([incident("a", points)], max_gap_hours=1)) == 2
 
 
 def test_rows_that_do_not_parse_are_skipped_rather_than_raised():
