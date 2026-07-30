@@ -91,6 +91,24 @@ async function board(ctx) {
 }
 
 async function queue(request, ctx) {
+  const refusal = moderatorRefusal(request, ctx);
+  if (refusal) return refusal;
   const records = (await readRecords(ctx)).filter((r) => !r.published);
   return json(200, { records });
+}
+
+// A missing token is a closed door, not an open one: an unconfigured deployment
+// must not be a deployment where anybody can read a stranger's contact details.
+function moderatorRefusal(request, ctx) {
+  if (!ctx.moderatorToken) return json(503, { error: 'moderation not configured' });
+  const header = request.headers.get('Authorization') || '';
+  const offered = header.startsWith('Bearer ') ? header.slice(7) : '';
+  return sameSecret(offered, ctx.moderatorToken) ? null : json(401, { error: 'moderator only' });
+}
+
+function sameSecret(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }

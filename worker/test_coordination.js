@@ -36,6 +36,25 @@ function get(path, { token } = {}) {
 
 const body = async (response) => await response.json();
 
+test('the moderation queue is unreachable without the moderator token', async () => {
+  const c = ctx();
+  await handle(post('/api/submit', OFFER), c);
+
+  for (const attempt of [get('/api/queue'), get('/api/queue', { token: 'wrong' })]) {
+    const response = await handle(attempt, c);
+    assert.equal(response.status, 401);
+    const payload = await body(response);
+    assert.equal(payload.records, undefined, 'an unauthenticated reader saw the queue');
+  }
+});
+
+test('an unconfigured moderator token closes the queue rather than opening it', async () => {
+  const c = ctx({ moderatorToken: undefined });
+  await handle(post('/api/submit', OFFER), c);
+  const response = await handle(get('/api/queue', { token: 'anything' }), c);
+  assert.equal(response.status, 503);
+});
+
 test('a submission is accepted but not published', async () => {
   const c = ctx();
   const response = await handle(post('/api/submit', OFFER), c);
