@@ -11,7 +11,9 @@ from pathlib import Path
 from build import registry
 from build.http import make_session
 from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis, cwfis_history, opensky
-from build.sources.fr import (arome, atmo, evac, firms, firms_history, gironde, mdf,
+from build import relay
+from build.sources.fr import (arome, atmo, evac, firms, firms_history, gironde,
+                              hydrants, relay_check, mdf,
                               terrain, water, wind)
 from build.sources.fr import roads as fr_roads
 from build import fire_spread, flares, zone_build, zones
@@ -337,6 +339,43 @@ def apply_france_extras(summary, session, out, previous_flares):
               f"{burn['area_km2'] if burn else 'no'} km2 burned)")
     else:
         print("WARNING: the Gironde feeds are unavailable; nothing claims the roads are open")
+
+    # Where help is being organised, as links this build never reads. A side file:
+    # curated data plus a reachability check, and neither may touch the danger map.
+    def _relay():
+        directory = relay.normalize(
+            relay.load(Path("public/static/fr/relay.json")),
+            now=datetime.now(timezone.utc).isoformat())
+        directory["entries"] = relay_check.check(directory["entries"])
+        return directory
+
+    directory = write_side_file(out, "relay.json", _relay)
+    if directory:
+        entries = directory["entries"]
+        down = sum(1 for e in entries if e["reachable"] is False)
+        # Unchecked is its own state and is reported as one. It covers entries past
+        # the cap, hosts whose status code carries no information, and checks that
+        # failed on our side -- none of which is the page being down.
+        unchecked = sum(1 for e in entries if e["reachable"] is None)
+        print(f"wrote {out / 'relay.json'} ({len(entries)} places, {down} not "
+              f"responding, {unchecked} unchecked, curated {directory['curated_at']})")
+        if directory["stale"]:
+            print("WARNING: the relay has not been curated recently; links may be dead")
+        for problem in directory["problems"]:
+            print(f"WARNING: relay entry refused: {problem}")
+    else:
+        print("WARNING: the relay is unavailable; the previous file keeps serving")
+
+    # Crowd-sourced hydrants for ground no register covers. Never merged with
+    # water.json: a register and a crowd source answer different questions, and
+    # fetch returns None rather than raising so an outage cannot read as empty.
+    crowd = write_side_file(out, "hydrants.json", lambda: hydrants.normalize(
+        hydrants.fetch(session)))
+    if crowd and crowd.get("available"):
+        print(f"wrote {out / 'hydrants.json'} ({len(crowd['points'])} OSM hydrants, "
+              f"crowd-sourced, completeness unknown)")
+    else:
+        print("WARNING: OSM hydrants unavailable; that is not the absence of water")
 
     # Which zones already have somebody's surveyed perimeter. Derived from what was
     # actually fetched rather than from a hardcoded list, so a failed fetch correctly

@@ -83,6 +83,7 @@ const COPY = {
       evacuated: 'Commune évacuée', burnt: 'Déjà brûlé', wind: 'Vent',
     },
     imageryNote: 'Choisissez une image, puis la date.',
+    help: "Où trouver de l'aide", pro: 'Vue pompiers',
     egressTitle: 'Routes vers la propagation modélisée',
     egressSome: (n) => `${n} route(s) chargée(s) mènent vers la direction que le modèle donne au feu.`,
     // "Not flagged" is not "safe". Said outright, because a reader looking at an
@@ -138,6 +139,7 @@ const COPY = {
       evacuated: 'Evacuated commune', burnt: 'Already burnt', wind: 'Wind',
     },
     imageryNote: 'Pick an image, then the date.',
+    help: 'Where to find help', pro: 'Responder view',
     egressTitle: 'Roads toward the modelled spread',
     egressSome: (n) => `${n} loaded road(s) lead toward the direction the model gives the fire.`,
     egressNone: 'No loaded road leads toward the modelled direction. That makes no road safe: the model sees neither smoke, nor cuts, nor traffic.',
@@ -628,6 +630,8 @@ function applyLanguage() {
   $('zone-label').textContent = c().zonePick;
   $('back-link').textContent = c().back;
   $('src-link').textContent = c().sources;
+  if ($('help-link')) $('help-link').textContent = c().help;
+  if ($('pro-link')) $('pro-link').textContent = c().pro;
   $('skills-summary').textContent = c().skillsSummary;
   $('scrub-label').textContent = c().scrubLabel;
   $('scrub-note').textContent = c().scrubNote;

@@ -18,6 +18,8 @@ the False state unreachable in production. And urllib announces itself as
 Python-urllib, which French government sites answer with 403 often enough that
 working prefecture pages would be labelled as not responding during a fire.
 """
+from urllib.parse import urlparse
+
 from build.http import make_session
 
 # Enough for a curated directory and a hard stop if the file ever grows. Every
@@ -41,6 +43,21 @@ def _status(url):
         return response.status_code
 
 
+# Hosts whose status code says nothing about whether the page exists. Measured
+# 2026-07-30: facebook.com returns HTTP 200 at ~308.5 KB with the title "Facebook"
+# for a real prefecture page, for a group invented on the spot, and for a username
+# that cannot exist -- all three within 62 bytes of each other. Checking such a host
+# would hand a reader a check mark nobody earned, so it is left unknown and no
+# request is spent on it. Unknown rather than unreachable: the page may well be
+# there, we simply cannot tell, and calling it down would be its own false claim.
+UNCHECKABLE_HOSTS = ("facebook.com", "instagram.com", "x.com", "twitter.com")
+
+
+def _uncheckable(url):
+    host = urlparse(url).hostname or ""
+    return any(host == bad or host.endswith(f".{bad}") for bad in UNCHECKABLE_HOSTS)
+
+
 def check(entries, opener=_status, cap=MAX_CHECKS):
     """Mark each entry reachable, unreachable, or leave it unknown.
 
@@ -55,7 +72,7 @@ def check(entries, opener=_status, cap=MAX_CHECKS):
     for index, entry in enumerate(entries or []):
         marked = dict(entry)
         marked["reachable"] = None
-        if index < cap:
+        if index < cap and not _uncheckable(entry["url"]):
             try:
                 marked["reachable"] = opener(entry["url"]) < REACHABLE_BELOW
             except Exception:  # noqa: BLE001 - our failure is not their outage

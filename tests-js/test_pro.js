@@ -272,7 +272,7 @@ test('no string asserts safety, in either language', () => {
   }
 });
 
-test('the page itself makes no safety claim and stays unlinked from the public map', () => {
+test('the page itself makes no safety claim and keeps page-relative paths', () => {
   const html = readFileSync('public/fr/pro.html', 'utf8');
   for (const pattern of [/en s[ée]curit[ée]/i, /aucun danger/i, /zones? br[ûu]l/i]) {
     assert.doesNotMatch(html, pattern);
@@ -283,10 +283,19 @@ test('the page itself makes no safety claim and stays unlinked from the public m
     if (/^(https?:|#|mailto:)/.test(url)) continue;
     assert.doesNotMatch(url, /^\//, `root-absolute path: ${url}`);
   }
-  // It ships unlinked until the owner decides it should exist.
-  for (const page of ['public/fr/index.html', 'public/fr/zone.html', 'public/fr/sources.html']) {
-    assert.doesNotMatch(readFileSync(page, 'utf8'), /pro\.html/, `${page} links the responder view`);
-  }
+});
+
+test('the responder page is reachable and names who it is for', () => {
+  // It shipped unlinked while the owner decided whether it should exist. That
+  // decision has been taken, so the assertion that replaced it is the opposite
+  // one: a reader arriving from the public map must learn immediately that this
+  // page shows modelled figures the public page deliberately withholds.
+  const zone = readFileSync('public/fr/zone.html', 'utf8');
+  assert.match(zone, /pro\.html/, 'the local view must link the responder page');
+
+  const page = readFileSync('public/fr/pro.html', 'utf8');
+  const js = readFileSync('public/js/pro-page.js', 'utf8');
+  assert.match(page + js, /pompier|responder|secours/i, 'the page must name its audience');
 });
 
 // The pure half above is covered directly. The DOM half fails silently: one
