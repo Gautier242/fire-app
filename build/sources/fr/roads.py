@@ -22,7 +22,12 @@ On reading the table, established from the 72-row capture of 2026-07-29:
 - *Constat* is when the closure was recorded, *Fin* its published end. A
   trailing "?" (20 rows) or "!" (8 rows) on Constat always accompanied a start
   in the future, so both mark a closure that has not begun rather than one
-  observed. Neither marker belongs in the parsed datetime.
+  observed. Neither marker belongs in the parsed datetime. 31 of the 54 rows
+  that outlive the Fin filter start later -- some in October, some in December
+  -- so `in_force` reports whether the cut had begun at the `now` the caller
+  passed. A row that has not begun is kept, because a scheduled closure is real
+  information; it simply is not a shut road, and must not be drawn as one. An
+  unreadable Constat is never in force: no date is no evidence of a closed road.
 - Fin is the publication's own statement that the closure is over, and 18 of
   the 72 rows had one already in the past -- stale entries the page has not
   dropped. Those are excluded. Fin is *not* trusted for anything else: 25 rows
@@ -315,6 +320,7 @@ def normalize(payload, geocode=None, cap=MAX_GEOCODE, now=None):
             "headline": f"{axe} — {localisation}" if localisation else axe,
             "since": since.isoformat(timespec="minutes") if since else None,
             "until": until.isoformat(timespec="minutes") if until else None,
+            "in_force": since is not None and since <= now,
             "lat": lat,
             "lon": lon,
             "source": "bison_fute",

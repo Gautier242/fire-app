@@ -79,7 +79,7 @@ def test_a_row_with_one_finished_event_among_several_is_still_a_closure():
 
 def test_every_live_record_carries_the_full_shape():
     keys = {"id", "kind", "road", "place", "dep", "headline",
-            "since", "until", "lat", "lon", "source"}
+            "since", "until", "in_force", "lat", "lon", "source"}
     for record in normalize(FIXTURE, geocode=no_geocode, now=CAPTURED):
         assert set(record) == keys
         assert record["kind"] == "closed"
@@ -210,6 +210,50 @@ def test_an_unparseable_timestamp_becomes_none_rather_than_dropping_the_row():
                             geocode=fake_geocode, now=CAPTURED))
     assert record["since"] is None
     assert record["until"] is None
+
+
+# --- in force now, or merely scheduled ------------------------------------
+
+def test_a_closure_scheduled_for_december_is_not_in_force():
+    # A cut that has not begun is real information, but it is not a shut road.
+    # It stays in the payload so a dated list can show it; it must never be
+    # counted among the roads that are closed now.
+    record = only(normalize(page(row(constat="14/12/26 09:00  ?", fin="18/12/26 17:00")),
+                            geocode=fake_geocode, now=CAPTURED))
+    assert record["since"] == "2026-12-14T09:00"
+    assert record["in_force"] is False
+
+
+def test_a_closure_that_began_this_morning_is_in_force():
+    record = only(normalize(page(row(constat="29/07 06:40", fin="31/07 17:00")),
+                            geocode=fake_geocode, now=CAPTURED))
+    assert record["in_force"] is True
+
+
+def test_a_closure_beginning_later_today_is_not_yet_in_force():
+    # The page drops the date on rows for today, so "23:55" read at 18:13 is a
+    # start five hours away, not one this morning.
+    record = only(normalize(page(row(constat="23:55", fin="")),
+                            geocode=fake_geocode, now=CAPTURED))
+    assert record["in_force"] is False
+
+
+def test_an_unreadable_start_is_not_in_force():
+    # Absence of a readable date is not evidence that the road is shut. It is
+    # also not evidence that it is open -- the row stays, unclaimed.
+    record = only(normalize(page(row(constat="bient" + "ot", fin="")),
+                            geocode=fake_geocode, now=CAPTURED))
+    assert record["since"] is None
+    assert record["in_force"] is False
+
+
+def test_the_live_page_is_mostly_closures_that_have_not_started():
+    # 54 rows survive the stale-Fin filter at capture time; 31 of them start
+    # later, as far out as December. Rendering all 54 as shut roads overstates
+    # the closed network by more than half.
+    records = normalize(FIXTURE, geocode=no_geocode, now=CAPTURED)
+    assert len([r for r in records if r["in_force"]]) == 23
+    assert len([r for r in records if not r["in_force"]]) == 31
 
 
 # --- geocoding ------------------------------------------------------------
