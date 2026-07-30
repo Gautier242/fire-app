@@ -215,7 +215,10 @@ function renderSkills() {
 function nearbyClosures() {
   if (!zone || !summary) return [];
   return (summary.closures || []).filter((closure) =>
-    closure.lat !== null && closure.lat !== undefined
+    // A cut scheduled for December is not a road that is shut now. Compared
+    // against false because Canada's records carry no in_force at all.
+    closure.in_force !== false
+    && closure.lat !== null && closure.lat !== undefined
     && haversineKm(zone, closure) <= zone.radius_km);
 }
 

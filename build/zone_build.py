@@ -49,7 +49,27 @@ def fires_in_zone(zone, fires):
     return sorted(near, key=lambda f: -(f.get("frp_total") or 0))
 
 
-def write_zone(out, zone, fires, wind_rows, terrain, spread=None):
+def closures_in_zone(zone, closures):
+    """Road cuts in force inside the zone radius.
+
+    Cuts scheduled to start later are excluded rather than dated: this list feeds
+    a map of what is shut now, and a marker is not a place to explain that a road
+    will close in December. The national list keeps them.
+    """
+    radius = zone.get("radius_km") or 50
+    near = []
+    for closure in closures or []:
+        if closure.get("in_force") is False:
+            continue
+        lat, lon = closure.get("lat"), closure.get("lon")
+        if lat is None or lon is None:
+            continue
+        if km_between(zone["lat"], zone["lon"], lat, lon) <= radius:
+            near.append(closure)
+    return near
+
+
+def write_zone(out, zone, fires, wind_rows, terrain, spread=None, closures=None):
     """Write one zone's detail file and return the payload."""
     payload = {
         "id": zone["id"],
@@ -62,6 +82,9 @@ def write_zone(out, zone, fires, wind_rows, terrain, spread=None):
         "wind": wind_rows or [],
         "terrain": terrain or None,
         "spread": spread or [],
+        # Always present, even when empty: the frontend cannot tell "no cuts near
+        # you" from "closures were never written" if the key can be missing.
+        "closures": closures_in_zone(zone, closures),
     }
     _write(Path(out) / f"{zone['id']}.json", payload)
     return payload

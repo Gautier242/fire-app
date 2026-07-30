@@ -107,3 +107,43 @@ def test_a_spread_projection_is_attached_by_fire_id(tmp_path):
     # The flag must survive to the browser so the interface can say the
     # projection is modelled and not measured.
     assert payload["spread"][0]["validated"] is False
+
+
+def test_closures_near_the_zone_reach_the_zone_file(tmp_path):
+    """The local map draws zone.closures, so an absent key means an empty layer.
+
+    mapview.drawLocal iterates zone["closures"]. Nothing wrote that key, so the
+    local view rendered no closures at all while the owner was asking why blocked
+    roads were missing. A reader who cannot see a cut drives into it.
+    """
+    zone = {"id": "gironde", "lat": 44.84, "lon": -0.58, "radius_km": 50,
+            "reason": "config"}
+    closures = [
+        {"id": "near", "road": "A63", "place": "Le Barp",
+         "lat": 44.61, "lon": -0.77, "in_force": True},
+        {"id": "far", "road": "N118", "place": "Sevres",
+         "lat": 48.82, "lon": 2.21, "in_force": True},
+        {"id": "scheduled", "road": "N125", "place": "Lez",
+         "lat": 44.70, "lon": -0.60, "in_force": False},
+        {"id": "nowhere", "road": "D1", "place": "?",
+         "lat": None, "lon": None, "in_force": True},
+    ]
+
+    payload = write_zone(tmp_path, zone, [], [], None, closures=closures)
+
+    assert [c["id"] for c in payload["closures"]] == ["near"], (
+        "only cuts in force and inside the radius belong on a local map")
+    assert json.loads((tmp_path / "gironde.json").read_text())["closures"]
+
+
+def test_a_zone_written_without_closures_still_has_the_key(tmp_path):
+    """An absent key and an empty list are different failures downstream.
+
+    The frontend cannot tell "no cuts near you" from "closures were never
+    written", so the key is always present.
+    """
+    zone = {"id": "landes", "lat": 44.0, "lon": -0.77, "radius_km": 50}
+
+    payload = write_zone(tmp_path, zone, [], [], None)
+
+    assert payload["closures"] == []

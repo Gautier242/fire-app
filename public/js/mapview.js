@@ -395,6 +395,11 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
       // Road closures. Bison Futé gives a point, not a line.
       layers.closures.clearLayers();
       for (const closure of summary.closures || []) {
+        // Bison Futé publishes cuts scheduled months ahead -- 25 of 47 on
+        // 2026-07-30, running to December. A scheduled cut is not a shut road.
+        // Tested against false rather than for truth: Canada's bc_roads records
+        // carry no in_force at all, and truthiness would empty its whole layer.
+        if (closure.in_force === false) continue;
         if (closure.lat === null || closure.lon === undefined) continue;
         L.circleMarker([closure.lat, closure.lon], {
           radius: 7, color: '#FF4D6D', fillColor: '#FF4D6D',
@@ -471,6 +476,7 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
 
       // Where not to go. Bison Futé gives a point, not a line.
       for (const closure of (zone && zone.closures) || []) {
+        if (closure.in_force === false) continue;
         if (closure.lat === null || closure.lat === undefined) continue;
         L.circleMarker([closure.lat, closure.lon], {
           radius: 7, color: '#FF4D6D', fillColor: '#FF4D6D',

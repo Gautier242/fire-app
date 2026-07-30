@@ -258,7 +258,8 @@ def _build_zones(summary, session, out, wildfires):
 
         try:
             zone_build.write_zone(zone_dir, zone, wildfires, wind_rows,
-                                  terrain=None, spread=projections)
+                                  terrain=None, spread=projections,
+                                  closures=summary.get("closures"))
             built.append(zone)
         except Exception:  # noqa: BLE001 - one bad zone must not lose the others
             continue
