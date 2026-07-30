@@ -11,7 +11,8 @@ from pathlib import Path
 from build import registry
 from build.http import make_session
 from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis, cwfis_history, opensky
-from build.sources.fr import arome, atmo, evac, firms, firms_history, mdf, terrain, water, wind
+from build.sources.fr import (arome, atmo, evac, firms, firms_history, gironde, mdf,
+                              terrain, water, wind)
 from build.sources.fr import roads as fr_roads
 from build import fire_spread, flares, zone_build, zones
 
@@ -442,6 +443,21 @@ def main():
                   f"across {passes} observed passes, newest {trail['generated_at']})")
         else:
             print("WARNING: the 7-day trail is unavailable; the previous file keeps serving")
+
+        # One departement's own crisis feeds: closed roads with a cause, evacuated
+        # communes, and the perimeter of ground that has burned. A side file because
+        # it covers Gironde alone and a failure on somebody else's server must never
+        # reach the national danger map.
+        local = write_side_file(out, "gironde.json", lambda: gironde.normalize(
+            gironde.fetch(session), now=datetime.now(timezone.utc).isoformat()))
+        if local:
+            fire_cuts = sum(1 for c in local["closures"] if c["fire_related"])
+            burn = local["burn_area"]
+            print(f"wrote {out / 'gironde.json'} ({len(local['closures'])} closed roads, "
+                  f"{fire_cuts} from fire, {len(local['evacuations'])} evacuated communes, "
+                  f"{burn['area_km2'] if burn else 'no'} km2 burned)")
+        else:
+            print("WARNING: the Gironde feeds are unavailable; nothing claims the roads are open")
 
     if country == "ca":
         history = write_history(out, lambda: cwfis_history.normalize(cwfis_history.fetch(session)))

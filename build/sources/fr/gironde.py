@@ -34,6 +34,7 @@ the interface. A failed fetch that renders as an empty road layer tells a reader
 roads are open when we have no idea.
 """
 from build.http import get_json
+from build.simplify import rdp, simplify_polygons
 
 BASE = "https://services2.arcgis.com/PnKR0J5kVXt842jE/arcgis/rest/services"
 
@@ -61,6 +62,57 @@ F_START = "evenements_de_crise_date_heure_de_debut_de_fermeture"
 F_REOPEN = "evenements_de_crise_date_heure_de_reouverture"
 
 _QUERY = {"where": "1=1", "outFields": "*", "outSR": "4326", "f": "geojson"}
+
+# Roughly 25 m at this latitude. The raw payload is 1.4 MB -- 20,795 closure
+# vertices and 17,786 commune vertices -- which is too much to hand a phone during
+# an evacuation. 25 m keeps a road recognisably on its own alignment: the failure to
+# avoid is a closure straightened into a line that crosses a different street, so
+# the tolerance is well below the gap between neighbouring roads. Ring collapse is
+# handled by simplify_polygons, which keeps a ring at full resolution rather than
+# lose it -- the Kilgard Road lesson, where four addresses under an evacuation order
+# disappeared at a 55 m tolerance.
+SIMPLIFY_DEG = 0.00025
+PRECISION = 5
+
+
+def _round(points):
+    return [[round(x, PRECISION), round(y, PRECISION)] for x, y in points]
+
+
+def _simplify_line(geometry):
+    """Thin a closed road without shortening it.
+
+    The endpoints are where the closure begins and ends, and rdp preserves them by
+    construction. A line reduced below two positions would stop being drawable, so
+    it is kept whole instead.
+    """
+    kind = geometry.get("type")
+    if kind == "LineString":
+        source = [(p[0], p[1]) for p in geometry["coordinates"]]
+        reduced = rdp(source, SIMPLIFY_DEG)
+        if len(reduced) < 2:
+            reduced = source
+        return {"type": kind, "coordinates": _round(reduced)}
+    if kind == "MultiLineString":
+        parts = []
+        for line in geometry["coordinates"]:
+            source = [(p[0], p[1]) for p in line]
+            reduced = rdp(source, SIMPLIFY_DEG)
+            parts.append(_round(reduced if len(reduced) >= 2 else source))
+        return {"type": kind, "coordinates": parts}
+    return geometry
+
+
+def _simplify_area(geometry):
+    kind = geometry.get("type")
+    if kind == "Polygon":
+        rings = simplify_polygons([geometry["coordinates"]], SIMPLIFY_DEG, PRECISION)
+        return {"type": kind, "coordinates": rings[0]}
+    if kind == "MultiPolygon":
+        return {"type": kind,
+                "coordinates": simplify_polygons(geometry["coordinates"],
+                                                 SIMPLIFY_DEG, PRECISION)}
+    return geometry
 
 
 def fetch(session, cap=MAX_FEATURES):
@@ -133,7 +185,7 @@ def _closure(feature, now_day):
         "kind": (properties.get(F_KIND) or "").strip() or None,
         "incident": (properties.get(F_LABEL) or "").strip() or None,
         "since": _iso(properties.get(F_START)),
-        "geometry": geometry,
+        "geometry": _simplify_line(geometry),
         "source": "gironde",
     }
 
@@ -153,7 +205,7 @@ def _commune(feature):
         # which is not a departement.
         "dep": insee[:2],
         "status": (properties.get("statut") or "").strip() or None,
-        "geometry": geometry,
+        "geometry": _simplify_area(geometry),
         "source": "gironde",
     }
 
@@ -201,7 +253,7 @@ def normalize(payload, now, cap=MAX_FEATURES):
                 "id": f"gironde-dev-{properties.get('OBJECTID')}",
                 "road": (properties.get(F_ROAD) or "").strip() or None,
                 "incident": (properties.get(F_LABEL) or "").strip() or None,
-                "geometry": feature["geometry"],
+                "geometry": _simplify_line(feature["geometry"]),
                 "source": "gironde",
             })
 
@@ -218,7 +270,7 @@ def normalize(payload, now, cap=MAX_FEATURES):
             # solid. A reader must be able to tell which one they are looking at.
             "observed": True,
             "area_km2": round(area / 1e6, 1) if isinstance(area, (int, float)) else None,
-            "geometry": burn[0]["geometry"],
+            "geometry": _simplify_area(burn[0]["geometry"]),
             "source": "gironde",
         }
     return out

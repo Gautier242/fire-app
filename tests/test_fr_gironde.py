@@ -171,3 +171,59 @@ def test_the_cap_bounds_what_a_live_incident_can_return():
 
     assert len(out["closures"]) == 10
     assert out["truncated"] is True
+
+
+def test_geometry_is_simplified_without_losing_a_road_or_a_commune():
+    """1.4 MB is too heavy for a phone, and nothing may vanish to shrink it.
+
+    Measured on the live payload: 20,795 closure vertices and 17,786 commune
+    vertices. A tolerance is applied, but a road simplified into a straight line
+    between two towns would point a reader down a different street, and a commune
+    that collapsed would tell those households no order covers them -- the failure
+    build/simplify.py already documents for Kilgard Road.
+    """
+    # A near-straight road surveyed at high resolution: the wobble is 0.00002 deg,
+    # about 2 m, well under the 25 m tolerance, so these are redundant positions
+    # rather than real corners. A 0.0004 deg zigzag would be ~44 m of genuine
+    # deviation and must NOT be flattened -- that is a real bend in a real road.
+    zigzag = [[-1.20 + i * 0.001, 44.89 + (0.00002 if i % 2 else 0)] for i in range(60)]
+    payload = {"roads": {"features": [_closure(coords=zigzag)]},
+               "evacuations": {"features": [_commune()]}}
+
+    out = gironde.normalize(payload, now="2026-07-30T12:00:00Z")
+
+    road = out["closures"][0]["geometry"]["coordinates"]
+    assert len(road) >= 2, "a closed road must stay drawable"
+    assert len(road) < 60, "the zigzag should have been reduced"
+    # The ends are where the closure starts and stops, so they must survive exactly.
+    assert road[0][0] == -1.2 and road[-1][0] == round(-1.20 + 59 * 0.001, 5)
+    assert out["evacuations"][0]["geometry"]["coordinates"], "the commune survived"
+
+
+def test_a_tiny_commune_is_kept_at_full_resolution_rather_than_collapsed():
+    tiny = _commune(name="Hameau", coords=[[[-1.2000, 44.9000], [-1.1996, 44.9000],
+                                            [-1.1996, 44.9004], [-1.2000, 44.9000]]])
+
+    out = gironde.normalize({"evacuations": {"features": [tiny]}},
+                            now="2026-07-30T12:00:00Z")
+
+    assert len(out["evacuations"]) == 1
+    ring = out["evacuations"][0]["geometry"]["coordinates"][0]
+    assert len(ring) >= 4, "a collapsed ring encloses nothing and deletes the order"
+
+
+def test_a_real_bend_in_a_road_survives_simplification():
+    """The other half of the tolerance, found by getting a fixture wrong.
+
+    A 0.0004 deg deviation is about 44 m -- a genuine bend, further from the
+    straight line than the width of the road. Flattening it would draw the closure
+    across ground the road does not cross, which is how a simplified map sends
+    somebody down the wrong street.
+    """
+    bend = [[-1.20 + i * 0.001, 44.89 + (0.0004 if i % 2 else 0)] for i in range(60)]
+
+    out = gironde.normalize({"roads": {"features": [_closure(coords=bend)]}},
+                            now="2026-07-30T12:00:00Z")
+
+    assert len(out["closures"][0]["geometry"]["coordinates"]) == 60, (
+        "44 m of real deviation is a corner, not noise")
