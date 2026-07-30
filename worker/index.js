@@ -204,8 +204,29 @@ async function readRecords(ctx) {
   return all.filter((record) => live(record, ctx));
 }
 
+// The public shape, built by naming the fields rather than by deleting the ones
+// we do not want. A blocklist forgets the field somebody adds next year; this
+// cannot leak a field nobody listed here. The contact line stays behind: a
+// moderator connects the two parties, so a stranger's phone number never sits on
+// a public page for anyone to harvest.
+//
+// provenance travels with the record on purpose. A board entry is a stranger's
+// claim that a human read, and it must never be mistaken for official
+// information from a mairie or a préfecture.
+const publicView = (record) => ({
+  id: record.id,
+  kind: record.kind,
+  category: record.category,
+  area: record.area,
+  text: record.text,
+  createdAt: record.createdAt,
+  publishedAt: record.publishedAt,
+  expiresAt: record.expiresAt,
+  provenance: record.provenance,
+});
+
 async function board(ctx) {
-  const records = (await readRecords(ctx)).filter((r) => r.published);
+  const records = (await readRecords(ctx)).filter((r) => r.published).map(publicView);
   return json(200, { records });
 }
 

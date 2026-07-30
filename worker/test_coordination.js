@@ -266,3 +266,39 @@ test('an expired record cannot be published back into life', async () => {
   assert.equal(response.status, 404);
   assert.deepEqual((await body(await handle(get('/api/board'), c))).records, []);
 });
+
+test('a public read carries no contact, no credential and no payment field', async () => {
+  const c = ctx();
+  await published(c, { ...OFFER, contact: 'Marie, 06 12 34 56 78' });
+
+  const response = await handle(get('/api/board'), c);
+  const raw = await response.text();
+  assert.doesNotMatch(raw, /06 12 34 56 78/, 'a phone number reached the public board');
+
+  const { records } = JSON.parse(raw);
+  assert.equal(records.length, 1);
+  assert.deepEqual(Object.keys(records[0]).sort(), [
+    'area', 'category', 'createdAt', 'expiresAt', 'id', 'kind', 'provenance', 'publishedAt', 'text',
+  ], 'the public shape changed — every added field is a new way to leak');
+
+  // Belt as well as braces: no field name anywhere in a public payload may look
+  // like a contact detail, a credential or a payment instrument.
+  const forbidden = /contact|phone|tel|email|mail|address|adresse|password|passe|token|secret|iban|rib|card|carte|payment|paiement|price|prix|amount|montant/i;
+  const walk = (node, path) => {
+    if (node === null || typeof node !== 'object') return;
+    for (const [key, value] of Object.entries(node)) {
+      assert.doesNotMatch(key, forbidden, `public field ${path}${key} looks like personal or payment data`);
+      walk(value, `${path}${key}.`);
+    }
+  };
+  walk(records[0], '');
+});
+
+test('a public read says where the entry came from, so it never reads as official', async () => {
+  const c = ctx();
+  await published(c);
+  const { records } = await body(await handle(get('/api/board'), c));
+  assert.equal(records[0].provenance.via, 'public-form');
+  assert.equal(records[0].provenance.reviewedAt, T0);
+  assert.equal(records[0].createdAt, T0);
+});
