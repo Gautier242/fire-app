@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entraide — local seulement</title>
+<style>
+  :root {
+    --ground:#0C1218; --surface:#111921; --raised:#18232C; --line:#21303B;
+    --ink:#E8EFF4; --muted:#90A5B2; --faint:#5F7381; --accent:#56C2E0;
+    --danger:#E4344F; --safe:#3FB98A; --caution:#E8A33D;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --ground:#EDE8DE; --surface:#FBF9F4; --raised:#F2EDE4; --line:#D2C8B6;
+            --ink:#171E24; --muted:#57636D; --faint:#87909A; --accent:#0E7490;
+            --danger:#AB162C; --safe:#1B7350; --caution:#9C6309; color-scheme: light; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:var(--sans);
+         font-size:16px; line-height:1.6; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 22px 20px 60px; }
+  .banner { background: var(--raised); border:1px solid var(--caution);
+            border-left:4px solid var(--caution); border-radius:3px;
+            padding:12px 15px; margin-bottom:22px; }
+  .banner b { color: var(--caution); }
+  .banner p { margin:6px 0 0; color:var(--muted); font-size:.9rem; }
+  h1 { font-size:1.35rem; margin:0 0 4px; }
+  h2 { font-family:var(--mono); font-size:.7rem; letter-spacing:.12em;
+       text-transform:uppercase; color:var(--faint); font-weight:500;
+       margin:26px 0 10px; }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap:24px; }
+  @media (max-width: 780px) { .cols { grid-template-columns: 1fr; } }
+  form { background:var(--surface); border:1px solid var(--line); border-radius:3px;
+         padding:15px; }
+  label { display:block; font-size:.78rem; color:var(--muted); margin:10px 0 3px; }
+  input, select, textarea {
+    width:100%; font:inherit; font-size:.9rem; background:var(--raised);
+    color:var(--ink); border:1px solid var(--line); border-radius:3px; padding:8px 10px;
+  }
+  textarea { resize:vertical; min-height:74px; }
+  button { font:inherit; font-size:.88rem; cursor:pointer; border-radius:3px;
+           border:1px solid var(--line); background:var(--raised); color:var(--ink);
+           padding:9px 14px; margin-top:12px; }
+  button.go { background:var(--accent); color:var(--ground); border:none; font-weight:600; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .row > * { flex:1; min-width:120px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:3px;
+          padding:12px 14px; margin-bottom:9px; }
+  .card .meta { font-family:var(--mono); font-size:.68rem; letter-spacing:.06em;
+                color:var(--faint); text-transform:uppercase; }
+  .card .body { margin:5px 0 0; }
+  .card .contact { font-family:var(--mono); font-size:.78rem; color:var(--accent);
+                   margin-top:5px; }
+  .empty { color:var(--muted); font-size:.9rem; padding:10px 0; }
+  .out { font-family:var(--mono); font-size:.76rem; white-space:pre-wrap;
+         background:var(--raised); border:1px solid var(--line); border-radius:3px;
+         padding:9px 11px; margin-top:11px; color:var(--muted); }
+  .out.bad { border-color:var(--danger); color:var(--danger); }
+  .out.ok  { border-color:var(--safe); color:var(--safe); }
+  .queue button { margin:8px 6px 0 0; padding:6px 11px; font-size:.8rem; }
+  .queue .pub { border-color:var(--safe); color:var(--safe); }
+  .queue .rej { border-color:var(--danger); color:var(--danger); }
+  .try { margin-top:8px; }
+  .try button { font-size:.74rem; padding:5px 9px; margin:4px 5px 0 0; }
+  footer { margin-top:34px; color:var(--faint); font-size:.8rem;
+           border-top:1px solid var(--line); padding-top:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="banner">
+    <b>Local seulement — rien n'est publié nulle part.</b>
+    <p>Ce serveur tourne sur cette machine, en mémoire. Tout disparaît à l'arrêt.
+       Aucune donnée ne quitte cet ordinateur et rien n'est visible en ligne.</p>
+  </div>
+
+  <h1>Entraide — besoins et propositions</h1>
+  <p style="color:var(--muted);margin:0">
+    Rien n'apparaît publiquement avant qu'une personne ne l'ait lu et approuvé.
+    Pour les urgences, appelez le 18 ou le 112 : ceci sert à la logistique autour,
+    pas à l'appel de secours.
+  </p>
+
+  <div class="cols">
+    <div>
+      <h2>Poster un besoin ou une proposition</h2>
+      <form id="f">
+        <div class="row">
+          <div>
+            <label for="kind">Type</label>
+            <select id="kind">
+              <option value="need">J'ai besoin</option>
+              <option value="offer">Je propose</option>
+            </select>
+          </div>
+          <div>
+            <label for="category">Catégorie</label>
+            <select id="category"></select>
+          </div>
+          <div>
+            <label for="area">Département</label>
+            <input id="area" value="33" maxlength="3">
+          </div>
+        </div>
+        <label for="text">Ce dont il s'agit (280 caractères)</label>
+        <textarea id="text" maxlength="280">40 lits de camp pour la salle des fêtes de Lanton ce soir.</textarea>
+        <label for="contact">Comment vous joindre (facultatif)</label>
+        <input id="contact" maxlength="120" placeholder="mairie de Lanton, 05 xx xx xx xx">
+        <p style="font-size:.76rem;color:var(--faint);margin:5px 0 0">
+          Visible par la personne qui relit, jamais sur le tableau public :
+          c'est elle qui met les gens en relation.
+        </p>
+        <button class="go" type="submit">Envoyer pour relecture</button>
+
+        <div class="try">
+          <span style="font-size:.74rem;color:var(--faint)">Essayez les refus :</span><br>
+          <button type="button" data-fill="scam">une arnaque au paiement</button>
+          <button type="button" data-fill="address">une adresse précise</button>
+          <button type="button" data-fill="flood">6 envois d'affilée</button>
+        </div>
+        <div class="out" id="out">Prêt.</div>
+      </form>
+    </div>
+
+    <div>
+      <h2>Ce que le public voit</h2>
+      <p style="font-size:.8rem;color:var(--faint);margin:0 0 9px">
+        Sans coordonnées : le tableau public ne les publie jamais, même si elles ont
+        été fournies.
+      </p>
+      <div id="board"><p class="empty">Rien de publié pour l'instant.</p></div>
+
+      <div id="mod" hidden>
+        <h2>File de relecture — vous</h2>
+        <div id="queue"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Limites en vigueur : 5 envois par heure et par adresse, 120 par heure au total.
+    Ce plafond global vient d'un calcul, pas d'un choix : à 20 secondes par message,
+    120 par heure représentent 40 minutes de relecture par heure.
+  </footer>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const token = new URLSearchParams(location.search).get('token');
+const CATEGORIES = ['shelter','water','food','transport','equipment','labour','medical','logistics'];
+const LABELS = { shelter:'Hébergement', water:'Eau', food:'Nourriture', transport:'Transport',
+                 equipment:'Matériel', labour:'Bras', medical:'Médical', logistics:'Logistique' };
+
+$('category').innerHTML = CATEGORIES
+  .map((c) => `<option value="${c}">${LABELS[c]}</option>`).join('');
+
+function say(text, cls = '') { const o = $('out'); o.textContent = text; o.className = `out ${cls}`; }
+
+async function send(payload) {
+  const r = await fetch('/api/submit', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await r.json().catch(() => ({}));
+  return { status: r.status, data };
+}
+
+$('f').onsubmit = async (e) => {
+  e.preventDefault();
+  const { status, data } = await send({
+    kind: $('kind').value, category: $('category').value, area: $('area').value.trim(),
+    text: $('text').value, contact: $('contact').value.trim() || undefined,
+  });
+  if (status === 202 || status === 200 || status === 201) {
+    say(`Reçu (${status}). En attente de relecture — invisible pour le public tant que personne ne l'a lu.`, 'ok');
+  } else {
+    say(`Refusé (${status}) : ${data.error || 'sans raison donnée'}`, 'bad');
+  }
+  refresh();
+};
+
+document.querySelectorAll('[data-fill]').forEach((b) => {
+  b.onclick = async () => {
+    if (b.dataset.fill === 'scam') {
+      $('text').value = "Je peux héberger 4 personnes, envoyez 50 EUR par paypal pour le carburant.";
+      say('Rempli. Envoyez pour voir le refus.');
+    } else if (b.dataset.fill === 'address') {
+      $('text').value = "Chambre libre au 12 rue des Ecoles, venez directement.";
+      say('Rempli. Envoyez pour voir le refus.');
+    } else {
+      say('Envoi de 6 messages…');
+      let last;
+      for (let i = 0; i < 6; i += 1) {
+        last = await send({ kind: 'offer', category: 'water', area: '33',
+                            text: `Bidons d'eau disponibles, lot numéro ${i + 1}.` });
+      }
+      say(`Le 6e a répondu ${last.status} : ${last.data.error || 'accepté'} — la limite par adresse est de 5 par heure.`,
+          last.status === 429 ? 'ok' : 'bad');
+      refresh();
+    }
+  };
+});
+
+function card(r, withActions) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.innerHTML = `<div class="meta">${r.kind === 'need' ? 'BESOIN' : 'PROPOSE'} · `
+    + `${LABELS[r.category] || r.category} · dép. ${r.area}</div>`
+    + `<p class="body"></p>`
+    + (r.contact ? `<div class="contact"></div>` : '');
+  el.querySelector('.body').textContent = r.text;
+  if (r.contact) el.querySelector('.contact').textContent = r.contact;
+  if (withActions) {
+    const pub = document.createElement('button');
+    pub.className = 'pub'; pub.textContent = 'Publier';
+    pub.onclick = () => review(r.id, 'publish');
+    const rej = document.createElement('button');
+    rej.className = 'rej'; rej.textContent = 'Refuser';
+    rej.onclick = () => review(r.id, 'reject');
+    el.append(pub, rej);
+  }
+  return el;
+}
+
+async function review(id, action) {
+  await fetch('/api/review', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({ id, action }),
+  });
+  refresh();
+}
+
+async function refresh() {
+  const board = await fetch('/api/board').then((r) => r.json()).catch(() => ({ records: [] }));
+  const list = $('board');
+  list.innerHTML = '';
+  if (!board.records || !board.records.length) {
+    list.innerHTML = '<p class="empty">Rien de publié pour l\'instant.</p>';
+  } else {
+    for (const r of board.records) list.append(card(r, false));
+  }
+
+  if (!token) return;
+  $('mod').hidden = false;
+  const queue = await fetch('/api/queue', { headers: { authorization: `Bearer ${token}` } })
+    .then((r) => r.json()).catch(() => ({ records: [] }));
+  const q = $('queue');
+  q.className = 'queue';
+  q.innerHTML = '';
+  if (!queue.records || !queue.records.length) {
+    q.innerHTML = '<p class="empty">File vide.</p>';
+  } else {
+    for (const r of queue.records) q.append(card(r, true));
+  }
+}
+
+refresh();
+</script>
+</body>
+</html>
