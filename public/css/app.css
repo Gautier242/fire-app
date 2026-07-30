@@ -256,15 +256,23 @@ dd.air { color: var(--air); }
 
 .chip {
   display: inline-flex; align-items: center; gap: 7px;
+  /* Never shrink. There are now nine controls in this bar, and a shrunk chip lets
+     its label overflow the box and land on top of the next chip's -- two layer
+     names printed over each other on a map somebody is reading in a hurry. */
+  flex: none; white-space: nowrap;
   font-family: var(--mono); font-size: 0.69rem; letter-spacing: 0.04em;
   padding: 8px 11px; min-height: 34px; cursor: pointer;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: var(--surface);
   backdrop-filter: blur(9px);
   border: 1px solid var(--line); border-radius: var(--r); color: var(--muted);
 }
 .chip:hover { color: var(--ink); }
 .chip[aria-pressed="true"] { color: var(--ink); border-color: var(--faint); }
-.chip[aria-pressed="false"] { opacity: 0.45; }
+/* Dim the label, never the panel. `opacity` on the whole chip made its background
+   translucent too, so street names read straight through an off layer's name --
+   "Biscarrosse" printed across "Routes vers le feu". */
+.chip[aria-pressed="false"] { color: var(--faint); }
+.chip[aria-pressed="false"] .sw { opacity: 0.45; }
 .chip[hidden] { display: none; }
 
 .sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
@@ -278,7 +286,7 @@ dd.air { color: var(--air); }
 .seg {
   display: flex; overflow: hidden;
   border: 1px solid var(--line); border-radius: var(--r);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: var(--surface);
   backdrop-filter: blur(9px);
 }
 .seg button {
@@ -300,7 +308,7 @@ dd.air { color: var(--air); }
 .scrubber {
   position: absolute; z-index: 500; bottom: 74px; left: 13px;
   width: min(340px, calc(100% - 26px)); padding: 11px 13px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  background: var(--surface);
   backdrop-filter: blur(9px);
   border: 1px solid var(--line); border-radius: var(--r);
 }
@@ -346,7 +354,7 @@ dd.air { color: var(--air); }
 .scalebar {
   position: absolute; z-index: 500; bottom: 13px; right: 13px;
   padding: 7px 11px;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: var(--surface);
   backdrop-filter: blur(9px);
   border: 1px solid var(--line); border-radius: var(--r);
   font-family: var(--mono); font-size: 0.65rem; color: var(--muted);
@@ -419,12 +427,17 @@ dd.air { color: var(--air); }
    reader could not otherwise tell a fire burning now from one that burned on
    Tuesday, which is the difference between leaving and staying put. */
 .scrubber.days { bottom: 4.6rem; }
+/* Sits directly over the street map, so it needs its own background: unbacked grey
+   text on top of place names is unreadable, and this line is the one that tells a
+   reader which satellite layer to choose. */
 .pick-note {
   display: block; font-size: .72rem; color: var(--muted);
   max-width: 34ch; margin-top: 2px;
+  background: var(--surface); border-radius: var(--r); padding: 2px 6px;
 }
 .legend {
-  position: absolute; right: .6rem; bottom: .6rem; z-index: 500;
+  /* Clear of Leaflet's zoom buttons and scale bar, which both sit bottom-right. */
+  position: absolute; right: 3.4rem; bottom: .6rem; z-index: 500;
   background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--r); padding: .4rem .6rem; font-size: .78rem;
   max-width: 24ch;
