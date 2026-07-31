@@ -1,6 +1,7 @@
 {
   "_readme": "Where help is being organised, as links only. Nothing here is fetched, quoted or republished: the tier says who publishes a page, never whether a post on it is true. Facebook cannot be read at all — a public page needs a session and a private group is private — so community entries are links a reader follows at their own judgement, and they carry the scam warning unconditionally. Update curated_at every time you touch this file; past 14 days the page says it is stale.",
   "_verified": "Every URL below was opened by hand on 2026-07-30 and confirmed to be the page the note describes. Do not add an entry you have not opened. facebook.com is not verifiable this way: a deleted group and a live prefecture page both return HTTP 200 with the same ~270 KB of login markup, so a resolving facebook.com URL proves nothing and no such entry ships here.",
+  "_community": "The two community entries are named as what they are: anonymous citizen sites with no legal identity, each stood up within days of this fire. They are checkable in a way facebook.com is not — each returns its own distinct page — but nobody is accountable for them and either could change hands overnight. Their notes say so, in addition to the unconditional scam warning the page already carries. Drop them rather than soften the notes.",
   "curated_at": "2026-07-30",
   "covers": ["33", "40"],
   "entries": [
@@ -73,6 +74,41 @@
       "area": "Landes",
       "url": "https://www.landes.gouv.fr/",
       "note": "Arrêtés et consignes pour les Landes."
+    },
+    {
+      "name": "JeVeuxAider.gouv.fr — Réserve Civique",
+      "tier": "official",
+      "area": "France",
+      "url": "https://www.jeveuxaider.gouv.fr/",
+      "note": "Plateforme publique du bénévolat. Missions filtrables par département."
+    },
+    {
+      "name": "PrévEntraide — Association Prévention MAIF",
+      "tier": "institutional",
+      "area": "Gironde et Landes",
+      "url": "https://www.preventraide.fr/",
+      "note": "Hébergement, transport, matériel entre particuliers. Zones « Incendies Gironde » et « Incendies Landes » ouvertes."
+    },
+    {
+      "name": "Secours populaire — appel Gironde et Landes",
+      "tier": "institutional",
+      "area": "Gironde et Landes",
+      "url": "https://www.secourspopulaire.fr/incendies-en-gironde-et-dans-les-landes-appel-a-la-solidarite/",
+      "note": "Appel aux dons financiers et au bénévolat, via la fédération la plus proche."
+    },
+    {
+      "name": "alertesfeux.fr — où on manque de bénévoles",
+      "tier": "community",
+      "area": "Gironde et Landes",
+      "url": "https://alertesfeux.fr/benevoles",
+      "note": "Page citoyenne, sans affiliation officielle et sans identité légale publiée. Recense des appels datés."
+    },
+    {
+      "name": "Passerelle Solidaire",
+      "tier": "community",
+      "area": "Gironde et Landes",
+      "url": "https://passerelle-solidarite-sudouest.vercel.app/",
+      "note": "Annuaire citoyen anonyme, sans mentions légales. Ne collecte ni don ni paiement ; renvoie vers d'autres sites."
     },
     {
       "name": "Croix-Rouge française",
