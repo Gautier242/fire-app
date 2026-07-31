@@ -7,7 +7,7 @@ import { createMap } from './mapview.js';
 import { describeLocal, officialNear } from './local.js';
 import { describeFr } from './rail-fr.js';
 import { actionsFor, SKILLS } from './helping.js';
-import { LAYERS, availableDates } from './imagery.js';
+import { LAYERS, availableDates, previewUrl } from './imagery.js';
 import { fetchViewport, MIN_ZOOM } from './overpass.js';
 import { haversineKm } from './geo.js';
 import { assessEgress, TOWARD } from './egress.js';
@@ -25,6 +25,16 @@ let summary = null;
 let point = null;
 let view = null;
 let dates = [];
+// Which of `dates` the reader picked. Held here rather than read off a slider,
+// because the contact sheet is the control now.
+let dateIndex = 0;
+// True once the reader has chosen a date themselves, after which nothing moves
+// the selection for them.
+let datePicked = false;
+
+// 1x1 transparent GIF, so a tile that never arrived shows the "nobody looked"
+// hatching rather than a broken-image glyph on top of it.
+const BLANK_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 let detailAbort = null;
 // The departement's own crisis feeds. null = not fetched, false = fetch failed.
 // Never collapsed into an empty object: empty means the departement says nothing is
@@ -82,7 +92,7 @@ const COPY = {
       closureOther: 'Route coupée (autre cause)', detour: 'Déviation officielle',
       evacuated: 'Commune évacuée', burnt: 'Déjà brûlé', wind: 'Vent',
     },
-    imageryNote: 'Choisissez une image, puis la date.',
+    imageryNote: 'Choisissez une image, puis la date la plus dégagée.',
     help: "Où trouver de l'aide", pro: 'Vue pompiers',
     egressTitle: 'Routes vers la propagation modélisée',
     egressSome: (n) => `${n} route(s) chargée(s) mènent vers la direction que le modèle donne au feu.`,
@@ -100,7 +110,8 @@ const COPY = {
     skillsSummary: 'Ce que je peux faire',
     noImagery: 'Aucune image', imageryLabel: 'Image satellite',
     scrubLabel: "Date de l'image",
-    scrubNote: 'Une date sans passage reste vide. Personne n\'a regardé ce jour-là.',
+    scrubNote: 'Vignette hachurée : aucun passage ce jour-là. Choisissez une date sans nuages.',
+    noPass: 'aucun passage ce jour-là',
     detailHint: `Zoomez (niveau ${MIN_ZOOM}) pour voir bâtiments et rues.`,
     detailLoading: 'Chargement des bâtiments et rues…',
     detailEmpty: 'Bâtiments et rues indisponibles (service OpenStreetMap saturé). Réessayez dans un instant.',
@@ -138,7 +149,7 @@ const COPY = {
       closureOther: 'Closed road (other cause)', detour: 'Official detour',
       evacuated: 'Evacuated commune', burnt: 'Already burnt', wind: 'Wind',
     },
-    imageryNote: 'Pick an image, then the date.',
+    imageryNote: 'Pick an image, then the clearest date.',
     help: 'Where to find help', pro: 'Responder view',
     egressTitle: 'Roads toward the modelled spread',
     egressSome: (n) => `${n} loaded road(s) lead toward the direction the model gives the fire.`,
@@ -154,7 +165,8 @@ const COPY = {
     skillsSummary: 'What I can do',
     noImagery: 'No imagery', imageryLabel: 'Satellite imagery',
     scrubLabel: 'Image date',
-    scrubNote: 'A date with no pass stays blank. Nobody looked that day.',
+    scrubNote: 'A hatched thumbnail means no pass that day. Pick a date without cloud.',
+    noPass: 'no pass that day',
     detailHint: `Zoom in (level ${MIN_ZOOM}) to see buildings and streets.`,
     detailLoading: 'Loading buildings and streets…',
     detailEmpty: 'Buildings and streets unavailable (OpenStreetMap service busy). Try again shortly.',
@@ -542,13 +554,93 @@ function showImageryPurpose() {
     : c().imageryNote;
 }
 
+// The date the reader is looking at, always one that exists.
+function currentDate() {
+  return dates[dateIndex] || dates[0];
+}
+
 function applyImagery() {
   const layer = currentLayer();
-  const date = dates[Number($('scrub').value)] || dates[0];
+  const date = currentDate();
   $('scrubber').hidden = !(layer && layer.dated);
   showImageryPurpose();
   $('scrub-date').textContent = date;
+  for (const button of $('film').children) {
+    button.setAttribute('aria-pressed', String(Number(button.dataset.i) === dateIndex));
+  }
   view.setImagery(layer, date);
+}
+
+// One real tile per date, so a reader can see the cloud before choosing the
+// day. Rebuilt whenever the layer or the zone changes, because a thumbnail of
+// the wrong sensor over the wrong ground is worse than none: it would be a
+// picture of somewhere else offered as a reason to pick a date.
+function fillFilm() {
+  const film = $('film');
+  const layer = currentLayer();
+  film.innerHTML = '';
+  if (!layer || !layer.dated || !zone) return;
+
+  const locale = lang === 'en' ? 'en-GB' : 'fr-FR';
+  dates.forEach((date, i) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.i = i;
+    button.setAttribute('aria-pressed', String(i === dateIndex));
+
+    const image = document.createElement('img');
+    image.className = 'thumb';
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    image.alt = '';
+    image.src = previewUrl(layer, date, zone.lat, zone.lon);
+    // A 404 means the satellite had no pass over this tile that day. It must
+    // not render as an empty white square: white is what a cloudless morning
+    // looks like, and a reader would pick the one day nobody looked.
+    image.onerror = () => {
+      button.classList.add('nopass');
+      button.title = `${date} — ${c().noPass}`;
+      // A transparent pixel rather than no src at all: an <img> with its source
+      // removed draws the browser's broken-image glyph, which is noise on top
+      // of the hatching that already says nobody looked.
+      image.src = BLANK_PIXEL;
+      // Today's tile is usually the missing one -- GIBS publishes a pass some
+      // hours after it happens -- so the default selection would open on an
+      // empty map. Step to the newest date that actually has an image, unless
+      // the reader has already chosen for themselves.
+      if (i === dateIndex && !datePicked) {
+        dateIndex = Math.min(i + 1, dates.length - 1);
+        applyImagery();
+      }
+    };
+
+    const when = document.createElement('span');
+    when.className = 'when';
+    when.textContent = new Date(`${date}T00:00:00Z`)
+      .toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+    button.append(image, when);
+    button.title = date;
+    button.onclick = () => { dateIndex = i; datePicked = true; applyImagery(); };
+    film.append(button);
+  });
+}
+
+// Left and right move through the days without thirty tab stops.
+function filmKeys(event) {
+  const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+  if (!step) return;
+  const next = dateIndex + step;
+  if (next < 0 || next >= dates.length) return;
+  event.preventDefault();
+  dateIndex = next;
+  datePicked = true;
+  applyImagery();
+  const button = $('film').children[dateIndex];
+  if (button) {
+    button.focus();
+    button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
 }
 
 function fillImagery() {
@@ -647,6 +739,7 @@ function applyLanguage() {
     hint(view.map.getZoom() < MIN_ZOOM ? c().detailHint : c().detailEmpty);
   }
   fillImagery();
+  fillFilm();
   renderSkills();
   render();
 }
@@ -657,6 +750,9 @@ async function selectZone(id) {
   zone = await loadJSON(`data/zones/${id}.json`);
   if (!point) view.setYou({ lat: zone.lat, lon: zone.lon }, 10);
   else view.setYou(point, 11);
+  // The previews are tiles of this zone's own ground, so they cannot be built
+  // until there is a zone.
+  fillFilm();
   render();
   loadDetail();
 }
@@ -679,7 +775,7 @@ async function boot() {
   ['fires', 'spread', 'closures official', 'detail', 'evacuated', 'burnt']
     .forEach((n) => view.toggle(n, true));
 
-  dates = availableDates(todayUTC(), 22);
+  dates = availableDates(todayUTC(), 30);
 
   document.querySelectorAll('#basemap button').forEach((b) => {
     b.onclick = () => {
@@ -737,8 +833,8 @@ async function boot() {
     applyClearLabel();
   };
 
-  $('imagery').onchange = applyImagery;
-  $('scrub').oninput = applyImagery;
+  $('imagery').onchange = () => { fillFilm(); applyImagery(); };
+  $('film').onkeydown = filmKeys;
   $('day').oninput = applyTrail;
   $('lang').onclick = () => {
     lang = lang === 'fr' ? 'en' : 'fr';

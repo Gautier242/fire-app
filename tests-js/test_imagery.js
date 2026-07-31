@@ -1,7 +1,8 @@
 // tests-js/test_imagery.js
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { LAYERS, availableDates, tileUrl } from '../public/js/imagery.js';
+import { readFileSync } from 'node:fs';
+import { LAYERS, availableDates, previewUrl, tileUrl, tileXY } from '../public/js/imagery.js';
 
 test('every layer declares what it is and whether it can be dated', () => {
   assert.ok(LAYERS.length >= 4);
@@ -73,4 +74,99 @@ test('a purpose never promises to show a fire that may not be visible', () => {
         `${layer.id} promises fires are visible; cloud and pass timing decide that`);
     }
   }
+});
+
+// --- choosing a date by eye -------------------------------------------------
+//
+// The newest image is often the worst one: cloud, or a pass that missed. A
+// reader had a bare slider and no way to tell a clear day from a cloudy one
+// without scrubbing onto it. These back a contact sheet -- one small real tile
+// per date -- so the choice is made by looking.
+
+test('a month of dates is offered, not three weeks', () => {
+  const dates = availableDates('2026-07-30');
+  assert.equal(dates.length, 30);
+  assert.equal(dates[0], '2026-07-30');
+  assert.equal(dates.at(-1), '2026-07-01');
+});
+
+test('a tile always contains the point it was asked for', () => {
+  // The invariant worth testing, rather than a hardcoded tile number: whatever
+  // x/y we compute, the point must fall inside that tile's own bounds. A
+  // swapped x/y or a missing Mercator term fails this everywhere.
+  const places = [
+    { lat: 44.8378, lon: -0.5792 },   // Bordeaux
+    { lat: 44.0, lon: -0.7667 },      // Landes
+    { lat: 51.5, lon: 0.0 },          // prime meridian
+    { lat: -33.9, lon: 151.2 },       // southern, eastern
+  ];
+  for (const zoom of [0, 4, 8, 12]) {
+    const n = 2 ** zoom;
+    for (const p of places) {
+      const { x, y } = tileXY(p.lat, p.lon, zoom);
+      assert.ok(Number.isInteger(x) && x >= 0 && x < n, `x out of range: ${x}`);
+      assert.ok(Number.isInteger(y) && y >= 0 && y < n, `y out of range: ${y}`);
+      // West edge of tile x, and east edge of tile x+1.
+      const west = (x / n) * 360 - 180;
+      const east = ((x + 1) / n) * 360 - 180;
+      assert.ok(west <= p.lon && p.lon < east, `lon ${p.lon} outside tile ${x}`);
+      const latOf = (row) => {
+        const t = Math.PI * (1 - 2 * row / n);
+        return (180 / Math.PI) * Math.atan(Math.sinh(t));
+      };
+      assert.ok(latOf(y + 1) <= p.lat && p.lat <= latOf(y), `lat ${p.lat} outside tile ${y}`);
+    }
+  }
+});
+
+test('a preview is one real tile of the layer, at the asked-for date', () => {
+  const viirs = LAYERS.find((l) => l.id === 'viirs_noaa20');
+  const url = previewUrl(viirs, '2026-07-14', 44.8378, -0.5792);
+
+  assert.ok(url.includes('2026-07-14'), 'the preview must be that date, not today');
+  for (const placeholder of ['{z}', '{x}', '{y}', '{date}']) {
+    assert.ok(!url.includes(placeholder), `${placeholder} was left unsubstituted`);
+  }
+  assert.ok(url.startsWith('https://'));
+});
+
+test('a preview keeps the tile axes the layer template asked for', () => {
+  // GIBS writes /{z}/{y}/{x} and most other services write /{z}/{x}/{y}. A
+  // substitution that ignores the order silently previews the wrong ground,
+  // which is worse than no preview: the reader picks a date on a lie.
+  const fake = {
+    id: 'fake', dated: true,
+    template: 'https://example.test/{z}/{y}/{x}.png?d={date}',
+  };
+  const { x, y } = tileXY(44.8378, -0.5792, 8);
+
+  assert.equal(previewUrl(fake, '2026-07-14', 44.8378, -0.5792),
+    `https://example.test/8/${y}/${x}.png?d=2026-07-14`);
+});
+
+test('an undated layer has no contact sheet to offer', () => {
+  // An annual composite is the same picture on all thirty days. Thirty
+  // identical thumbnails would invite a reader to choose between them.
+  const s2 = LAYERS.find((l) => l.id === 's2cloudless');
+  assert.equal(previewUrl(s2, '2026-07-14', 44.8378, -0.5792), '');
+});
+
+test('a tile that never arrived is never rendered as clear sky', () => {
+  // The one rendering this cannot use is blank white: that is what a cloudless
+  // morning looks like, so a reader would pick the single day nobody looked.
+  // The page marks those thumbnails and the stylesheet hatches them.
+  const page = readFileSync('public/js/local-page.js', 'utf8');
+  const css = readFileSync('public/css/app.css', 'utf8');
+
+  assert.match(page, /image\.onerror/, 'a failed preview must be caught');
+  assert.match(page, /classList\.add\('nopass'\)/, 'and marked');
+  assert.match(css, /\.film button\.nopass .thumb\s*\{[^}]*repeating-linear-gradient/,
+    'and hatched, so it cannot read as a clear day');
+});
+
+test('the imagery copy tells a reader to choose against cloud', () => {
+  // The whole point of the contact sheet: the newest pass is often the worst.
+  const page = readFileSync('public/js/local-page.js', 'utf8');
+  assert.match(page, /nuages|dégagée/, 'the French copy must mention cloud');
+  assert.match(page, /cloud/, 'and the English copy');
 });

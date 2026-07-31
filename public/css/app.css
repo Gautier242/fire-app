@@ -325,6 +325,41 @@ dd.air { color: var(--air); }
 .scrub-foot { text-transform: none; letter-spacing: 0; margin-top: 5px; }
 #scrub { width: 100%; margin: 9px 0 0; accent-color: var(--heat-2); min-height: 24px; }
 
+/* The contact sheet. Thirty small real tiles, newest first, scrolled
+   horizontally: cloud is the thing a reader is choosing against and it is
+   visible at this size. Wider than the other scrubbers because the whole point
+   is seeing several days at once. */
+.scrubber.sheet { width: min(430px, calc(100% - 26px)); }
+.film {
+  display: flex; gap: 5px; margin: 9px 0 0;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: thin; padding-bottom: 4px;
+}
+.film button {
+  flex: 0 0 auto; width: 54px; padding: 0; cursor: pointer;
+  background: none; border: 1px solid var(--line); border-radius: 5px;
+  overflow: hidden; color: var(--faint);
+  font-family: var(--mono); font-size: 0.58rem; line-height: 1.5;
+}
+.film button:hover { border-color: var(--faint); }
+.film button[aria-pressed="true"] {
+  border-color: var(--heat-2); color: var(--ink);
+  box-shadow: 0 0 0 1px var(--heat-2);
+}
+.film button:focus-visible { outline: 2px solid var(--heat-2); outline-offset: 1px; }
+.film .thumb {
+  display: block; width: 54px; height: 54px; object-fit: cover;
+  background: var(--ground);
+}
+/* A tile that never arrived must not look like a clear sky. Blank white is the
+   one rendering this cannot use: it reads as good weather. */
+.film button.nopass .thumb {
+  background: repeating-linear-gradient(45deg,
+    var(--ground), var(--ground) 4px, var(--line-soft) 4px, var(--line-soft) 8px);
+}
+.film button.nopass { opacity: 0.75; }
+.film .when { display: block; padding: 2px 0 3px; }
+
 .plane {
   font-size: 17px; line-height: 1; color: var(--accent);
   text-shadow: 0 0 5px var(--ground);

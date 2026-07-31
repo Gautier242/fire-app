@@ -136,7 +136,36 @@ export function tileUrl(layer, date) {
   return layer.dated ? layer.template.replace('{date}', date) : layer.template;
 }
 
-export function availableDates(today, count = 22) {
+// Which tile of the standard web-mercator grid holds a point, at a given zoom.
+// Written out rather than pulled from Leaflet: the contact sheet builds plain
+// <img> URLs and never puts these tiles on a map.
+export function tileXY(lat, lon, zoom) {
+  const n = 2 ** zoom;
+  const phi = (lat * Math.PI) / 180;
+  const x = Math.floor(((lon + 180) / 360) * n);
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan(phi) + 1 / Math.cos(phi)) / Math.PI) / 2) * n);
+  const clamp = (v) => Math.min(n - 1, Math.max(0, v));
+  return { x: clamp(x), y: clamp(y) };
+}
+
+// One tile is enough to judge a date by. At zoom 8 a tile is about 110 km
+// across at this latitude, which frames a 50 km zone with its surroundings --
+// enough to see whether the cloud sitting on it is a corner or the whole sky.
+export const PREVIEW_ZOOM = 8;
+
+export function previewUrl(layer, date, lat, lon, zoom = PREVIEW_ZOOM) {
+  // An annual composite is the same picture every day of the month. Offering
+  // thirty identical thumbnails would invite a choice that does not exist.
+  if (!layer || !layer.dated) return '';
+  const { x, y } = tileXY(lat, lon, zoom);
+  return tileUrl(layer, date)
+    .replace('{z}', zoom)
+    .replace('{x}', x)
+    .replace('{y}', y);
+}
+
+export function availableDates(today, count = 30) {
   const out = [];
   const start = new Date(`${today}T00:00:00Z`);
   for (let i = 0; i < count; i++) {

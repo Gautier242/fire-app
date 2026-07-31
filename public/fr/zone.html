@@ -179,11 +179,15 @@
         </div>
       </div>
 
-      <div class="scrubber" id="scrubber" hidden>
+      <!-- A contact sheet, not a slider. The newest image is often the worst
+           one — cloud, or a pass that missed — and a bare slider made a reader
+           scrub onto each date to find that out. One real tile per day, so the
+           choice is made by looking. -->
+      <div class="scrubber sheet" id="scrubber" hidden>
         <div class="scrub-head">
           <span id="scrub-label">Date de l'image</span><b id="scrub-date"></b>
         </div>
-        <input type="range" id="scrub" min="0" max="21" value="0" step="1">
+        <div class="film" id="film" role="group" aria-label="Choisir la date de l'image"></div>
         <div class="scrub-foot"><span id="scrub-note"></span></div>
       </div>
 
