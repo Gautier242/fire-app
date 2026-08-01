@@ -28,9 +28,7 @@ const PAGES = [
 //
 // This list is the whole escape hatch, deliberately. Adding an id to it is a
 // visible decision in a diff; leaving a French label in the HTML is not.
-const JS_OWNED = new Set([
-  'opacity-value', 'scrub-date', 'day-date', 'sensor-res', 'sensor-revisit',
-]);
+const JS_OWNED = new Set(['opacity-value']);
 
 const strip = (html) => html.replace(/<!--[\s\S]*?-->/g, '');
 
