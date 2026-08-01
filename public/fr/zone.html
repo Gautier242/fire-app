@@ -46,7 +46,14 @@
       display: block; margin-top: 4px;
       font-family: var(--mono); font-size: 0.72rem; color: var(--accent);
     }
-    .chip.hint { cursor: default; color: var(--muted); }
+    /* A sentence, not a control. As a plain .chip it inherited white-space:
+       nowrap and rendered as a 350px-wide button lying across the map, looking
+       pressable. */
+    .chip.hint {
+      cursor: default; color: var(--muted);
+      white-space: normal; max-width: 34ch; line-height: 1.45;
+      background: none; border-color: transparent;
+    }
     .imagery-pick { display: flex; align-items: center; gap: 8px; }
     .imagery-pick select { font-size: 0.78rem; padding: 5px 7px; max-width: 15rem; }
   </style>
