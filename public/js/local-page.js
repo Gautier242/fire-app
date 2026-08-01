@@ -41,6 +41,10 @@ let detailAbort = null;
 // shut, failed means we could not ask, and those must not render the same.
 let official = null;
 let trail = null;
+// Crowd-mapped hydrants. null = not asked for, false = asked for and failed.
+// The distinction is the whole point: an empty layer must never be the same
+// thing on screen as a layer we could not fetch.
+let hydrants = null;
 // What was showing before the map was cleared, so restoring gives a reader their own
 // layers back rather than a default they never chose.
 let restore = [];
@@ -87,6 +91,8 @@ export const COPY = {
     // that adding a chip without a translation fails a test rather than shipping.
     layersToggle: 'Calques',
     chipFires: 'Feux détectés',
+    chipWater: "Points d'eau — registre",
+    chipHydrants: 'Bornes OSM — pas un registre',
     chipSpread: 'Propagation modélisée',
     chipClosures: 'Routes coupées',
     chipDetail: 'Bâtiments et rues',
@@ -99,6 +105,19 @@ export const COPY = {
     ariaFilm: "Choisir la date de l'image",
     trailChip: 'Chaleur sur 7 jours',
     trailUnavailable: 'Historique 7 jours indisponible.',
+    // L'eau, dite au public. Aucun registre SDIS ne publie pour la Gironde : ce
+    // qui s'affiche ici est du bénévolat cartographique, et doit le dire.
+    waterMap: {
+      waterPoint: "Point d'eau",
+      registerTier: 'Registre SDIS — zone réellement recensée',
+      crowdTier: 'OpenStreetMap — pas un registre',
+      capacityUnknown: 'Capacité inconnue',
+      noFlowGuarantee: "Un registre ne garantit ni le débit ni l'accès.",
+      crowdCaveat: "Recensement bénévole, complétude inconnue. Aucun point affiché ne veut pas dire aucune eau.",
+      kinds: { borne: 'Borne ou poteau', citerne: 'Citerne ou réserve', naturel: "Point d'aspiration" },
+    },
+    waterCrowdOnly: "Aucun registre SDIS ne publie pour ce département. Les points affichés viennent d'OpenStreetMap : ce n'est pas un relevé, et l'absence de point n'est pas l'absence d'eau.",
+    waterUnavailable: "Points d'eau indisponibles : nous n'avons pas pu interroger la base. Ce n'est pas l'absence d'eau.",
     dayLabel: 'Jour', dayAll: '7 jours',
     dayNote: 'Chaleur détectée par satellite. Ce n\'est pas un périmètre : les nuages masquent la détection.',
     legendTitle: 'Légende',
@@ -157,6 +176,8 @@ export const COPY = {
       + (when ? ` (département survey of ${when}).` : ' (département survey).'),
     layersToggle: 'Layers',
     chipFires: 'Fires detected',
+    chipWater: 'Water points — register',
+    chipHydrants: 'OSM hydrants — not a register',
     chipSpread: 'Modelled spread',
     chipClosures: 'Closed roads',
     chipDetail: 'Buildings and streets',
@@ -168,6 +189,17 @@ export const COPY = {
     ariaFilm: 'Choose the image date',
     trailChip: 'Heat over 7 days',
     trailUnavailable: 'The 7-day history is unavailable.',
+    waterMap: {
+      waterPoint: 'Water point',
+      registerTier: 'SDIS register — an actually surveyed area',
+      crowdTier: 'OpenStreetMap — not a register',
+      capacityUnknown: 'Capacity unknown',
+      noFlowGuarantee: 'A register guarantees neither flow nor access.',
+      crowdCaveat: 'Volunteer survey, completeness unknown. No point shown does not mean no water.',
+      kinds: { borne: 'Hydrant or pillar', citerne: 'Tank or reserve', naturel: 'Draft point' },
+    },
+    waterCrowdOnly: 'No SDIS register publishes for this département. The points shown come from OpenStreetMap: that is not a survey, and the absence of a point is not the absence of water.',
+    waterUnavailable: 'Water points unavailable: we could not query the database. That is not the absence of water.',
     dayLabel: 'Day', dayAll: '7 days',
     dayNote: 'Heat detected by satellite. Not a perimeter: cloud blocks detection.',
     legendTitle: 'Legend',
@@ -760,6 +792,47 @@ async function loadDetail() {
   hint(detail.buildings.length || detail.roads.length ? '' : c().detailEmpty);
 }
 
+/* ---------------- water ---------------- */
+
+// Two sources, drawn differently and never added together. mapview draws the
+// register solid and the crowd hollow and dashed, and that distinction is the
+// reason this is one call rather than two loops here.
+//
+// For the Gironde specifically every point on screen is crowd-mapped: the
+// published SDIS registers cover Pyrenees-Atlantiques, the Tarn, Rennes,
+// Annecy, Angers and La Rochelle, and none of them is the Gironde. So the
+// register array is usually empty here and the caveat is not decoration.
+function renderWater() {
+  if (!view) return;
+  const register = ((zone && zone.water && zone.water.points) || [])
+    .filter((p) => p.tier !== 'crowd');
+  const centre = at();
+  const radius = (zone && zone.radius_km) || 50;
+  const crowd = hydrants && hydrants.available !== false
+    ? (hydrants.points || []).filter((p) => haversineKm(centre, p) <= radius)
+    : [];
+  view.drawWater({ register, crowd }, c().waterMap);
+}
+
+// 52 KB, fetched only when a reader asks for it and never on the path to the
+// numbers they came for. Until it lands the chip says so rather than showing an
+// empty map, because an empty water layer reads as "no water here".
+async function showWater(on) {
+  if (!on) { view.drawWater({ register: [], crowd: [] }, c().waterMap); return; }
+  if (hydrants === null) {
+    hydrants = await loadJSON('data/hydrants.json').catch(() => false);
+  }
+  if (!hydrants || hydrants.available === false) {
+    const chip = document.querySelector('.chip[data-layer="hydrants"]');
+    if (chip) {
+      chip.setAttribute('aria-pressed', 'false');
+      chip.querySelector('span').textContent = c().waterUnavailable;
+    }
+    return;
+  }
+  renderWater();
+}
+
 /* ---------------- language ---------------- */
 
 function applyLanguage() {
@@ -803,6 +876,7 @@ function applyLanguage() {
   }
   fillImagery();
   fillFilm();
+  renderWater();
   renderSkills();
   render();
 }
@@ -816,6 +890,7 @@ async function selectZone(id) {
   // The previews are tiles of this zone's own ground, so they cannot be built
   // until there is a zone.
   fillFilm();
+  renderWater();
   render();
   loadDetail();
 }
@@ -853,6 +928,7 @@ async function boot() {
       chip.setAttribute('aria-pressed', String(on));
       // The trail is lazy-loaded and owns its own toggle path.
       if (chip.dataset.layer === 'history') { showTrail(on); return; }
+      if (chip.dataset.layer === 'hydrants') { showWater(on); view.toggle('hydrants', on); applyClearLabel(); return; }
       view.toggle(chip.dataset.layer, on);
       if (chip.dataset.layer === 'detail' && on) loadDetail();
       // Egress is computed from the Overpass roads, which only load past MIN_ZOOM.

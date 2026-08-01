@@ -168,6 +168,17 @@
           <button class="chip" data-layer="history" aria-pressed="false" id="chip-trail">
             <i class="sw hist"></i><span data-t="trailChip">Chaleur sur 7 jours</span>
           </button>
+          <!-- Two chips, never one, exactly as on the responder view. A register
+               is a survey whose gaps mean something; OpenStreetMap's gaps mean
+               nobody mapped that street. Never summed, never drawn alike.
+               Both start off: 2,992 crowd points inside this radius is a wall of
+               dots over the streets somebody is trying to read. -->
+          <button class="chip" data-layer="water" aria-pressed="false" id="chip-water">
+            <i class="sw water-reg"></i><span data-t="chipWater">Points d'eau — registre</span>
+          </button>
+          <button class="chip" data-layer="hydrants" aria-pressed="false" id="chip-hydrants">
+            <i class="sw water-osm"></i><span data-t="chipHydrants">Bornes OSM — pas un registre</span>
+          </button>
 
           <button class="chip clear" id="clear-layers" type="button">
             <span data-t="clearLayers">Tout masquer</span>
