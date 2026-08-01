@@ -138,20 +138,20 @@
 
       <div class="toolbar" id="toolbar">
         <button class="chip" data-layer="fires" aria-pressed="true">
-          <i class="sw fire"></i><span>Chaleur détectée</span>
+          <i class="sw fire"></i><span data-t="chipFires">Chaleur détectée</span>
         </button>
         <!-- Dashed, always. A modelled wedge must never look observed. -->
         <button class="chip" data-layer="spread" aria-pressed="true">
-          <i class="sw hist"></i><span>Propagation modélisée †</span>
+          <i class="sw hist"></i><span data-t="chipSpread">Propagation modélisée †</span>
         </button>
         <!-- Two chips, never one. A register is a survey and its gaps mean
              something; OpenStreetMap's gaps mean nobody mapped that street.
              They are never summed and never drawn alike. -->
         <button class="chip" data-layer="water" aria-pressed="true">
-          <i class="sw water-reg"></i><span>Points d'eau — registre</span>
+          <i class="sw water-reg"></i><span data-t="chipWater">Points d'eau — registre</span>
         </button>
         <button class="chip" data-layer="hydrants" aria-pressed="true">
-          <i class="sw water-osm"></i><span>Bornes OSM — pas un registre</span>
+          <i class="sw water-osm"></i><span data-t="chipHydrants">Bornes OSM — pas un registre</span>
         </button>
       </div>
     </div>

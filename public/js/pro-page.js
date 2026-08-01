@@ -68,6 +68,14 @@ export const COPY = {
     loading: 'Chargement…', failed: 'Données indisponibles.',
     updated: (m) => `Mis à jour il y a ${m} min`,
     modelTitle: 'Ce que vaut le modèle',
+    // The map's own controls, named in the HTML by data-t. The dagger on the
+    // spread chip and the two water chips saying what they are and are not do
+    // the same work in English: a modelled wedge must not read as observed, and
+    // a crowd survey must not read as a register.
+    chipFires: 'Chaleur détectée',
+    chipSpread: 'Propagation modélisée †',
+    chipWater: "Points d'eau — registre",
+    chipHydrants: 'Bornes OSM — pas un registre',
     triageTitle: 'Foyers, par puissance radiative décroissante',
     noFires: 'Aucune détection dans cette zone sur la fenêtre publiée. Les satellites passent quelques fois par jour et les nuages masquent la détection : c’est un état de nos données, pas du terrain.',
     resourcesTitle: 'Ce que nous ne voyons pas',
@@ -124,6 +132,10 @@ export const COPY = {
     loading: 'Loading…', failed: 'Data unavailable.',
     updated: (m) => `Updated ${m} min ago`,
     modelTitle: 'What the model is worth',
+    chipFires: 'Heat detected',
+    chipSpread: 'Modelled spread †',
+    chipWater: 'Water points — register',
+    chipHydrants: 'OSM hydrants — not a register',
     triageTitle: 'Fires, by descending radiative power',
     noFires: 'No detection in this zone over the published window. Satellites pass a few times a day and cloud blocks detection: this is a statement about our data, not about the ground.',
     resourcesTitle: 'What we cannot see',
@@ -552,6 +564,18 @@ function renderFreshness() {
 
 function render() {
   const c = t(lang);
+  // Set here rather than only in the click handler: a reader who chose English on
+  // another page and then opened this one got the whole page in English inside a
+  // document still declaring itself French, which is what a screen reader obeys.
+  document.documentElement.lang = lang;
+  // Every control that declares its own key, in one pass. Relabelling by id meant
+  // the four map chips were never in the list and stayed French in English.
+  document.querySelectorAll('[data-t]').forEach((el) => {
+    el.textContent = c[el.dataset.t];
+  });
+  document.querySelectorAll('[data-t-aria]').forEach((el) => {
+    el.setAttribute('aria-label', c[el.dataset.tAria]);
+  });
   $('page-title').textContent = c.title;
   $('page-sub').textContent = c.subtitle;
   $('lang').textContent = c.lang;
