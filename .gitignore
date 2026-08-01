@@ -7,3 +7,4 @@ public/data/
 public/fr/data/
 .DS_Store
 .playwright-mcp/
+graphify-out/
