@@ -361,11 +361,42 @@ dd.air { color: var(--air); }
   top: var(--s-3); left: var(--s-3);
   /* Never the full width: the right-hand side belongs to the legend. */
   max-width: min(56ch, calc(100% - 38ch));
-  display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: center;
-  padding: var(--s-1);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(9px);
   border: 1px solid var(--line); border-radius: var(--r);
+}
+/* Folded away, the panel is just its own button and the map has the screen.
+
+   A <details> rather than a scripted panel: the browser already owns the open
+   state, the keyboard behaviour and the accessible name, and this file's legend
+   and skills list are written the same way. Nothing to wire, nothing to break
+   when JS has not loaded yet -- which on this page is a state a reader can
+   actually be in. */
+.toolbar > summary {
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-2) var(--s-3); min-height: 32px; cursor: pointer;
+  font-family: var(--mono); font-size: var(--t-sm);
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted);
+  list-style: none;
+}
+.toolbar > summary::-webkit-details-marker { display: none; }
+.toolbar > summary:hover { color: var(--ink); }
+/* A triangle that turns, so open and closed are legible without reading. */
+.toolbar > summary::before {
+  content: ''; flex: none;
+  border: 4px solid transparent; border-left-color: currentColor;
+  transform: translateX(1px);
+}
+.toolbar[open] > summary::before {
+  border-left-color: transparent; border-top-color: currentColor;
+  transform: translateY(2px);
+}
+.toolbar[open] > summary { border-bottom: 1px solid var(--line-soft); }
+/* Closed, it shrinks to the button rather than holding the panel's width open. */
+.toolbar:not([open]) { max-width: max-content; }
+.toolbar-body {
+  display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: center;
+  padding: var(--s-1);
 }
 
 .chip {
@@ -597,15 +628,53 @@ dd.air { color: var(--air); }
 /* ---------------- small screens ---------------- */
 
 @media (max-width: 860px) {
-  body { overflow: auto; }
+  /* The old stacking put the rail first at its natural height -- 1,796 px on a
+     390 px phone, two full screens -- so a reader scrolled past the whole
+     sidebar to reach the map, and the filters that drive the map sat below it.
+
+     Both panes are on screen at once now. The rail keeps the top of the page,
+     because the answer and the FR-Alert box are the two things this app exists
+     to say and neither may end up behind anything; it is capped and scrolls
+     inside itself, so the map always holds the lower half rather than being
+     pushed off the bottom. Nothing is hidden, and nothing has to be tapped to
+     be seen -- the rail simply stops eating the whole document. */
+  body { overflow: hidden; }
   .shell, .shell[data-mode="minimal"] {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    height: auto; min-height: 100dvh;
+    display: flex; flex-direction: column;
+    height: 100dvh; min-height: 0;
   }
-  .rail { border-right: none; border-bottom: 1px solid var(--line); }
-  .map { min-height: 62dvh; }
+  .rail {
+    border-right: none; border-bottom: 1px solid var(--line);
+    flex: 0 1 auto; max-height: 46dvh; min-height: 0; overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* Scrolls inside itself. Opening the layer panel used to push the column past
+     the viewport and give the whole document 103 px of scroll, which on a phone
+     reads as the page jumping when you tap a control. */
+  .map { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .shell[data-mode="minimal"] .rail { max-height: none; }
   .shell[data-mode="minimal"] .map { display: none; }
+
+  /* On a phone the controls stop floating and become a bar above the map.
+     Floating chrome costs the map twice over: the panel covers the terrain, and
+     because it is only ever a screen-width wide the panel has to wrap, so it
+     covers more of it. In flow it costs the map nothing, and folded away it
+     costs one line. */
+  .toolbar {
+    position: static; max-width: none;
+    border-radius: 0; border-left: none; border-right: none; border-top: none;
+    backdrop-filter: none;
+  }
+  .toolbar:not([open]) { max-width: none; }
+  .map { display: flex; flex-direction: column; }
+  #map { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; }
+
+  /* The rail's own padding is generous for a 380px column and wasteful on a
+     phone, where it is the width of the screen. */
+  .answer, .block, .zone-pick, .picker { padding-left: var(--s-4); padding-right: var(--s-4); }
+  .fact { padding-left: var(--s-4); padding-right: var(--s-4); }
+  .rail-head, .rail-foot { padding-left: var(--s-4); padding-right: var(--s-4); }
+  .official { margin-left: var(--s-4); margin-right: var(--s-4); }
 }
 
 /* The day slider for the seven-day trail, and the legend. Both exist because a
@@ -683,3 +752,15 @@ dd.air { color: var(--air); }
 .no-entry.other { background: #7A8894; }
 /* Distinct from the layer chips: it acts on all of them rather than being one. */
 .chip.clear { border-style: dashed; color: var(--muted); }
+
+/* Placed after the legend rules on purpose. An identical selector earlier in the
+   file loses the cascade to the one below it at equal specificity, so the mobile
+   override silently did nothing and the legend stayed pinned over a 390px map --
+   which on that width is most of the map. */
+@media (max-width: 860px) {
+  .map .legend {
+    position: static; max-width: none; border-radius: 0;
+    border-left: none; border-right: none; border-bottom: none;
+    backdrop-filter: none;
+  }
+}

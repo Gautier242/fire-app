@@ -85,6 +85,7 @@ export const COPY = {
       + (when ? ` (relevé du Département du ${when}).` : ' (relevé du Département).'),
     // The map's own controls. Declared here and named in the HTML by data-t, so
     // that adding a chip without a translation fails a test rather than shipping.
+    layersToggle: 'Calques',
     chipFires: 'Feux détectés',
     chipSpread: 'Propagation modélisée',
     chipClosures: 'Routes coupées',
@@ -154,6 +155,7 @@ export const COPY = {
     evacUnavailable: 'The evacuated commune list is unavailable. That does not mean there is no order.',
     burntArea: (km2, when) => `${km2} km² already burnt`
       + (when ? ` (département survey of ${when}).` : ' (département survey).'),
+    layersToggle: 'Layers',
     chipFires: 'Fires detected',
     chipSpread: 'Modelled spread',
     chipClosures: 'Closed roads',

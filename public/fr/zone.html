@@ -141,52 +141,56 @@
     <div class="map">
       <div id="map"></div>
 
-      <div class="toolbar" id="toolbar">
-        <button class="chip" data-layer="fires" aria-pressed="true">
-          <i class="sw fire"></i><span data-t="chipFires">Feux détectés</span>
-        </button>
-        <button class="chip" data-layer="spread" aria-pressed="true">
-          <i class="sw hist"></i><span data-t="chipSpread">Propagation modélisée</span>
-        </button>
-        <button class="chip" data-layer="closures official" aria-pressed="true">
-          <i class="sw road"></i><span data-t="chipClosures">Routes coupées</span>
-        </button>
-        <button class="chip" data-layer="detail" aria-pressed="true">
-          <i class="sw sat"></i><span data-t="chipDetail">Bâtiments et rues</span>
-        </button>
-        <button class="chip" data-layer="evacuated" aria-pressed="true" id="chip-evacuated">
-          <i class="sw order"></i><span data-t="chipEvacuated">Communes évacuées</span>
-        </button>
-        <button class="chip" data-layer="burnt" aria-pressed="true" id="chip-burnt">
-          <i class="sw hist"></i><span data-t="chipBurnt">Déjà brûlé</span>
-        </button>
-        <button class="chip" data-layer="egress" aria-pressed="false" id="chip-egress">
-          <i class="sw road"></i><span data-t="chipEgress">Routes vers le feu</span>
-        </button>
-        <button class="chip" data-layer="history" aria-pressed="false" id="chip-trail">
-          <i class="sw hist"></i><span data-t="trailChip">Chaleur sur 7 jours</span>
-        </button>
+      <details class="toolbar" id="toolbar" open>
+        <summary data-t="layersToggle">Calques</summary>
+        <div class="toolbar-body">
+          <button class="chip" data-layer="fires" aria-pressed="true">
+            <i class="sw fire"></i><span data-t="chipFires">Feux détectés</span>
+          </button>
+          <button class="chip" data-layer="spread" aria-pressed="true">
+            <i class="sw hist"></i><span data-t="chipSpread">Propagation modélisée</span>
+          </button>
+          <button class="chip" data-layer="closures official" aria-pressed="true">
+            <i class="sw road"></i><span data-t="chipClosures">Routes coupées</span>
+          </button>
+          <button class="chip" data-layer="detail" aria-pressed="true">
+            <i class="sw sat"></i><span data-t="chipDetail">Bâtiments et rues</span>
+          </button>
+          <button class="chip" data-layer="evacuated" aria-pressed="true" id="chip-evacuated">
+            <i class="sw order"></i><span data-t="chipEvacuated">Communes évacuées</span>
+          </button>
+          <button class="chip" data-layer="burnt" aria-pressed="true" id="chip-burnt">
+            <i class="sw hist"></i><span data-t="chipBurnt">Déjà brûlé</span>
+          </button>
+          <button class="chip" data-layer="egress" aria-pressed="false" id="chip-egress">
+            <i class="sw road"></i><span data-t="chipEgress">Routes vers le feu</span>
+          </button>
+          <button class="chip" data-layer="history" aria-pressed="false" id="chip-trail">
+            <i class="sw hist"></i><span data-t="trailChip">Chaleur sur 7 jours</span>
+          </button>
 
-        <button class="chip clear" id="clear-layers" type="button">
-          <span data-t="clearLayers">Tout masquer</span>
-        </button>
+          <button class="chip clear" id="clear-layers" type="button">
+            <span data-t="clearLayers">Tout masquer</span>
+          </button>
 
-        <span class="chip hint" id="detail-hint" hidden></span>
+          <span class="chip hint" id="detail-hint" hidden></span>
 
-        <div class="imagery-pick">
-          <select id="imagery" data-t-aria="imageryLabel" aria-label="Image satellite">
-            <option value="" data-t="noImagery">Aucune image</option>
-          </select>
-          <span class="pick-note" id="imagery-note"></span>
+          <div class="imagery-pick">
+            <select id="imagery" data-t-aria="imageryLabel" aria-label="Image satellite">
+              <option value="" data-t="noImagery">Aucune image</option>
+            </select>
+            <span class="pick-note" id="imagery-note"></span>
+          </div>
+
+          <div class="seg basemap" id="basemap" role="group"
+               data-t-aria="ariaBasemap" aria-label="Fond de carte">
+            <button data-base="plan_ign" aria-pressed="true" data-t="baseIgn">Plan IGN</button>
+            <button data-base="imagery" aria-pressed="false" data-t="baseSatellite">Satellite</button>
+            <button data-base="plain" aria-pressed="false" data-t="basePlain">Sobre</button>
+          </div>
+      
         </div>
-
-        <div class="seg basemap" id="basemap" role="group"
-             data-t-aria="ariaBasemap" aria-label="Fond de carte">
-          <button data-base="plan_ign" aria-pressed="true" data-t="baseIgn">Plan IGN</button>
-          <button data-base="imagery" aria-pressed="false" data-t="baseSatellite">Satellite</button>
-          <button data-base="plain" aria-pressed="false" data-t="basePlain">Sobre</button>
-        </div>
-      </div>
+      </details>
 
       <!-- A contact sheet, not a slider. The newest image is often the worst
            one — cloud, or a pass that missed — and a bare slider made a reader

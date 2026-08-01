@@ -52,6 +52,7 @@ export const COPY = {
     change: 'Changer', other: 'Canada', lang: 'English', local: 'Vue locale',
     sources: "D'où viennent ces données",
     // The map's own controls, named in the HTML by data-t.
+    layersToggle: 'Calques',
     chipOrders: 'Zones évacuées', chipRain: 'Pluie', chipFires: 'Feux détectés',
     chipClosures: 'Routes coupées', chipAircraft: 'Moyens aériens',
     chipDanger: 'Danger par département', chipAir: "Qualité de l'air",
@@ -92,6 +93,7 @@ export const COPY = {
     picker: 'Or search an address', hint: 'Address, town or village',
     change: 'Change', other: 'Canada', lang: 'Français', local: 'Local view',
     sources: 'Where this data comes from',
+    layersToggle: 'Layers',
     chipOrders: 'Evacuated areas', chipRain: 'Rain', chipFires: 'Fires detected',
     chipClosures: 'Closed roads', chipAircraft: 'Air support',
     chipDanger: 'Danger by département', chipAir: 'Air quality',

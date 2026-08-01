@@ -118,6 +118,27 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map);
 
+  // On a phone the layer panel starts folded. It ships open in the HTML because
+  // on a desktop it is worth seeing which layers are on without asking, but at
+  // 390 px the open panel is 322 px tall against a map pane of 844 -- it leaves
+  // 133 px of actual map, so the control covers the thing it controls. Folded,
+  // the same map pane is 420 px.
+  //
+  // Here rather than in each page's boot: all four pages that have a map call
+  // this, and none of them should have to remember.
+  // Every folding panel over the map, not just the toolbar: in flow on a phone
+  // the legend is another 238 px, and the two of them together left 183 px of
+  // map on an 844 px screen.
+  //
+  // Only the panels. The brief allows the layer filters, the legend and
+  // provenance detail to fold; it does not allow the FR-Alert box or any
+  // sentence about what we cannot see to fold, and those live in the rail,
+  // which this never touches.
+  if (window.matchMedia('(max-width: 860px)').matches) {
+    document.querySelectorAll('.map details[open]')
+      .forEach((panel) => panel.removeAttribute('open'));
+  }
+
   const bases = basemaps();
   bases.plain.addTo(map);
 
