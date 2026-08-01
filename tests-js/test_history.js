@@ -171,3 +171,23 @@ test('the past palette still ranks intensity, so a band is not lost', () => {
   assert.equal(PAST_PALETTE.length, 3, 'one colour per FRP band');
   assert.equal(new Set(PAST_PALETTE).size, 3, 'the three bands stay distinguishable');
 });
+
+// A pinned window states its own origin. Without honouring it the frontend
+// re-derives the index origin from the newest observation, which is exactly the
+// rolling behaviour the pinned window exists to replace: read six months later,
+// every hour label would be six months late.
+test('a pinned window dates its hours from window_start, not the last pass', () => {
+  const pinned = {
+    window_start: '2026-07-21T00:00:00Z',
+    generated_at: '2026-07-24T09:00:00Z',
+    hours: 336, points: [], wind: [],
+  };
+  assert.equal(hourToDate(pinned, 0).toISOString(), '2026-07-21T00:00:00.000Z');
+  assert.equal(hourToDate(pinned, 1).toISOString(), '2026-07-21T01:00:00.000Z');
+  assert.equal(hourToDate(pinned, 335).toISOString(), '2026-08-03T23:00:00.000Z');
+});
+
+test('a rolling window still dates its last hour from the newest pass', () => {
+  const rolling = { generated_at: '2026-07-29T12:00:00Z', hours: 168, points: [], wind: [] };
+  assert.equal(hourToDate(rolling, 167).toISOString(), '2026-07-29T12:00:00.000Z');
+});

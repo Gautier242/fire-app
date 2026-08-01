@@ -16,7 +16,19 @@ export function observedPasses(history) {
 // France's is 168, so a hardcoded 71 would date every French detection 96 hours
 // early -- a four-day-old burn shown as happening now.
 export function hourToDate(history, hour) {
-  if (!history || !history.generated_at) return null;
+  if (!history) return null;
+  // A pinned window carries its own origin, so hour 0 is the first hour of the
+  // window rather than however far back the newest pass happens to be. Without
+  // this the origin is re-derived from generated_at, which is the rolling
+  // behaviour a pinned window exists to replace: read six months after the
+  // fire, every label would be six months late.
+  if (history.window_start) {
+    const start = new Date(history.window_start);
+    if (!Number.isNaN(start.getTime())) {
+      return new Date(start.getTime() + hour * 3600 * 1000);
+    }
+  }
+  if (!history.generated_at) return null;
   const newest = new Date(history.generated_at);
   if (Number.isNaN(newest.getTime())) return null;
   const last = (history.hours || 72) - 1;

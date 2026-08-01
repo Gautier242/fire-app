@@ -73,6 +73,11 @@ URLS = (
 # 72-hour Canadian payload the frontend already decodes.
 HOURS = 168
 
+# A pinned window is a fortnight, counted from its own start rather than from
+# the newest detection. The national trail keeps rolling; this is for a payload
+# that has to still show the same fortnight when it is read months afterwards.
+WINDOW_HOURS = 14 * 24
+
 # Fire radiative power in MW per 375 m pixel. Derivation and the arithmetic
 # behind the two numbers are in the module docstring.
 BAND_CUTS = (10.0, 100.0)
@@ -113,7 +118,8 @@ def _empty():
     return {"generated_at": None, "hours": HOURS, "points": [], "wind": []}
 
 
-def normalize(payload, now, shapes=None, registry=None, cap=MAX_POINTS):
+def normalize(payload, now, shapes=None, registry=None, cap=MAX_POINTS,
+              window_start=None):
     """The 7-day trail as [lon, lat, hour, band, foreign] rows.
 
     `now` is required and the clock is never read here: the future-timestamp
@@ -152,6 +158,13 @@ def normalize(payload, now, shapes=None, registry=None, cap=MAX_POINTS):
     # backdate generated_at and understate how fresh the last look was.
     anchor = _hour_floor(max(d[3] for d in detections))
 
+    # With a window the grid is pinned to the event instead. `hours` and the
+    # index origin both come from the window, so the same detections produce the
+    # same indices whether the build runs during the fire or a year later.
+    pinned = window_start is not None
+    span = WINDOW_HOURS if pinned else HOURS
+    origin = _hour_floor(window_start) if pinned else None
+
     # The mask flags rather than deletes in the summary, where an incident has a
     # popup that can explain itself. A trail point is a non-interactive dot with
     # nowhere to say "refinery", and a permanent seven-day smear over
@@ -176,18 +189,29 @@ def normalize(payload, now, shapes=None, registry=None, cap=MAX_POINTS):
 
     points = []
     for index, (lon, lat, frp, stamp, _confidence) in enumerate(detections):
-        hour = HOURS - 1 - int((anchor - _hour_floor(stamp)).total_seconds() // 3600)
-        # Older than the window is dropped, never clamped: clamping would date
-        # week-old heat to the start of the trail and draw it as part of it.
-        if not 0 <= hour < HOURS:
+        if pinned:
+            hour = int((_hour_floor(stamp) - origin).total_seconds() // 3600)
+        else:
+            hour = span - 1 - int((anchor - _hour_floor(stamp)).total_seconds() // 3600)
+        # Outside the window is dropped, never clamped. Clamping would date
+        # week-old heat to the start of the trail and draw it as part of it --
+        # and on a pinned window it would take heat from six months after the
+        # fire and file it under the fire's last hour.
+        if not 0 <= hour < span:
             continue
         foreign = not tagged[index]["in_country"] if tagged else False
         points.append([round(lon, PRECISION), round(lat, PRECISION),
                        hour, _band(frp), foreign])
 
-    return {
+    out = {
         "generated_at": anchor.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "hours": HOURS,
+        "hours": span,
         "points": points,
         "wind": [],
     }
+    # Stated in the payload rather than assumed by the reader: without it the
+    # frontend has to guess the index origin, and its only other guess is the
+    # newest observation, which is exactly the rolling behaviour being replaced.
+    if pinned:
+        out["window_start"] = origin.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return out
