@@ -50,6 +50,17 @@ export const COPY = {
     locate: 'Vérifier près de chez moi', checking: 'Vérification…',
     picker: 'Ou cherchez une adresse', hint: 'Adresse, ville ou village',
     change: 'Changer', other: 'Canada', lang: 'English', local: 'Vue locale',
+    sources: "D'où viennent ces données",
+    // The map's own controls, named in the HTML by data-t.
+    chipOrders: 'Zones évacuées', chipRain: 'Pluie', chipFires: 'Feux détectés',
+    chipClosures: 'Routes coupées', chipAircraft: 'Moyens aériens',
+    chipDanger: 'Danger par département', chipAir: "Qualité de l'air",
+    chipSatellite: 'Image satellite',
+    baseMap: 'Carte', baseSatellite: 'Satellite',
+    detailLabel: 'Détail',
+    modeMinimal: 'Minimal', modeSimple: 'Simple', modeAdvanced: 'Avancé',
+    ariaBasemap: 'Fond de carte', ariaModes: 'Niveau de détail',
+    ariaScar: 'Zones brûlées, saison passée',
     updated: (m) => `Mis à jour il y a ${m} min`,
     stale: "Cette information date de plus d'une heure.",
     loading: 'Chargement…', failed: 'Données indisponibles.',
@@ -80,6 +91,16 @@ export const COPY = {
     locate: 'Check near me', checking: 'Checking…',
     picker: 'Or search an address', hint: 'Address, town or village',
     change: 'Change', other: 'Canada', lang: 'Français', local: 'Local view',
+    sources: 'Where this data comes from',
+    chipOrders: 'Evacuated areas', chipRain: 'Rain', chipFires: 'Fires detected',
+    chipClosures: 'Closed roads', chipAircraft: 'Air support',
+    chipDanger: 'Danger by département', chipAir: 'Air quality',
+    chipSatellite: 'Satellite image',
+    baseMap: 'Map', baseSatellite: 'Satellite',
+    detailLabel: 'Detail',
+    modeMinimal: 'Minimal', modeSimple: 'Simple', modeAdvanced: 'Advanced',
+    ariaBasemap: 'Base map', ariaModes: 'Level of detail',
+    ariaScar: 'Burnt areas, past season',
     updated: (m) => `Updated ${m} min ago`,
     stale: 'This information is more than an hour old.',
     loading: 'Loading…', failed: 'Data unavailable.',
@@ -189,6 +210,15 @@ function applyMode() {
 function applyLanguage() {
   document.documentElement.lang = lang;
   const t = c();
+  // Every control that declares its own key, in one pass. The map's chips, the
+  // basemap and the detail dial were relabelled by id and so were never
+  // relabelled at all; they stayed French for anyone reading in English.
+  document.querySelectorAll('[data-t]').forEach((el) => {
+    el.textContent = t[el.dataset.t];
+  });
+  document.querySelectorAll('[data-t-aria]').forEach((el) => {
+    el.setAttribute('aria-label', t[el.dataset.tAria]);
+  });
   $('locate').textContent = t.locate;
   $('picker-label').textContent = t.picker;
   $('place-search').placeholder = t.hint;
@@ -196,9 +226,13 @@ function applyLanguage() {
   $('lang').textContent = t.lang;
   $('ca-link').textContent = t.other;
   $('zone-link').textContent = t.local;
-  // The trail chip carries an unavailability message when a fetch failed, so it
-  // is only relabelled while it still reads as a working control.
-  if (trail !== false) $('chip-trail').querySelector('span').textContent = t.trailChip;
+  $('src-link').textContent = t.sources;
+  // The trail chip carries an unavailability message when the fetch failed. The
+  // sweep would overwrite it with the working label, turning "we could not ask"
+  // into what looks like a week with no fire in it.
+  if (trail === false) {
+    $('chip-trail').querySelector('span').textContent = t.trailUnavailable;
+  }
   const scarPick = $('scar-year');
   if (scarPick) {
     [...scarPick.options].forEach((option) => {

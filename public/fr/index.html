@@ -60,52 +60,54 @@
 
       <div class="toolbar" id="toolbar">
         <button class="chip" data-layer="orders" aria-pressed="true">
-          <i class="sw order"></i><span>Zones évacuées</span>
+          <i class="sw order"></i><span data-t="chipOrders">Zones évacuées</span>
         </button>
         <button class="chip" data-layer="rain" aria-pressed="false">
-          <i class="sw aqhi"></i><span>Pluie</span>
+          <i class="sw aqhi"></i><span data-t="chipRain">Pluie</span>
         </button>
         <button class="chip" data-layer="fires" aria-pressed="true">
-          <i class="sw fire"></i><span>Feux détectés</span>
+          <i class="sw fire"></i><span data-t="chipFires">Feux détectés</span>
         </button>
         <button class="chip" data-layer="closures" aria-pressed="true">
-          <i class="sw road"></i><span>Routes coupées</span>
+          <i class="sw road"></i><span data-t="chipClosures">Routes coupées</span>
         </button>
         <button class="chip" data-layer="aircraft" aria-pressed="true">
-          <i class="sw plane"></i><span>Moyens aériens</span>
+          <i class="sw plane"></i><span data-t="chipAircraft">Moyens aériens</span>
         </button>
         <button class="chip" data-layer="danger" aria-pressed="true">
-          <i class="sw hist"></i><span>Danger par département</span>
+          <i class="sw hist"></i><span data-t="chipDanger">Danger par département</span>
         </button>
         <button class="chip" data-layer="aqhi" aria-pressed="false">
-          <i class="sw aqhi"></i><span>Qualité de l'air</span>
+          <i class="sw aqhi"></i><span data-t="chipAir">Qualité de l'air</span>
         </button>
         <button class="chip" data-layer="satellite" aria-pressed="false" data-adv>
-          <i class="sw sat"></i><span>Image satellite</span>
+          <i class="sw sat"></i><span data-t="chipSatellite">Image satellite</span>
         </button>
         <button class="chip" data-layer="history" aria-pressed="false" id="chip-trail" data-adv>
-          <i class="sw hist"></i><span>Chaleur sur 7 jours</span>
+          <i class="sw hist"></i><span data-t="trailChip">Chaleur sur 7 jours</span>
         </button>
 
         <label class="seg scar-pick" id="scar-pick" data-adv>
-          <span id="scar-label">Saison passée</span>
-          <select id="scar-year" aria-label="Zones brûlées, saison passée">
-            <option value="">Aucune</option>
+          <span id="scar-label" data-t="scarLabel">Saison passée</span>
+          <select id="scar-year" data-t-aria="ariaScar" aria-label="Zones brûlées, saison passée">
+            <option value="" data-t="scarNone">Aucune</option>
           </select>
         </label>
 
-        <div class="seg basemap" id="basemap" role="group" aria-label="Fond de carte">
-          <button data-base="plain" aria-pressed="true">Carte</button>
-          <button data-base="imagery" aria-pressed="false">Satellite</button>
+        <div class="seg basemap" id="basemap" role="group"
+             data-t-aria="ariaBasemap" aria-label="Fond de carte">
+          <button data-base="plain" aria-pressed="true" data-t="baseMap">Carte</button>
+          <button data-base="imagery" aria-pressed="false" data-t="baseSatellite">Satellite</button>
         </div>
       </div>
 
       <div class="detail-dial" id="dial">
-        <span class="label">Détail</span>
-        <div class="seg" id="modes" role="group" aria-label="Niveau de détail">
-          <button data-mode="minimal" aria-pressed="false">Minimal</button>
-          <button data-mode="simple" aria-pressed="true">Simple</button>
-          <button data-mode="advanced" aria-pressed="false">Avancé</button>
+        <span class="label" data-t="detailLabel">Détail</span>
+        <div class="seg" id="modes" role="group"
+             data-t-aria="ariaModes" aria-label="Niveau de détail">
+          <button data-mode="minimal" aria-pressed="false" data-t="modeMinimal">Minimal</button>
+          <button data-mode="simple" aria-pressed="true" data-t="modeSimple">Simple</button>
+          <button data-mode="advanced" aria-pressed="false" data-t="modeAdvanced">Avancé</button>
         </div>
       </div>
     </div>
