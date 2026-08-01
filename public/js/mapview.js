@@ -118,17 +118,14 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map);
 
-  // On a phone the layer panel starts folded. It ships open in the HTML because
-  // on a desktop it is worth seeing which layers are on without asking, but at
-  // 390 px the open panel is 322 px tall against a map pane of 844 -- it leaves
-  // 133 px of actual map, so the control covers the thing it controls. Folded,
-  // the same map pane is 420 px.
+  // On a phone every folding panel over the map starts folded. They ship open in
+  // the HTML because on a desktop seeing which layers are on is worth the space,
+  // but at 390 px the open toolbar is 322 px and the legend another 238 against
+  // an 844 px screen: together they left 183 px of actual map, so the controls
+  // covered the thing they control. Folded, the same map pane is 385 px.
   //
-  // Here rather than in each page's boot: all four pages that have a map call
-  // this, and none of them should have to remember.
-  // Every folding panel over the map, not just the toolbar: in flow on a phone
-  // the legend is another 238 px, and the two of them together left 183 px of
-  // map on an 844 px screen.
+  // Here rather than in each page's boot: all four pages with a map call this,
+  // and none of them should have to remember.
   //
   // Only the panels. The brief allows the layer filters, the legend and
   // provenance detail to fold; it does not allow the FR-Alert box or any
@@ -737,6 +734,27 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
           weight: 2, fillOpacity: 0.75,
         }).bindPopup(`<b>${closure.road} — ${closure.place}</b><br>${closure.headline || ''}`)
           .addTo(layers.closures);
+      }
+
+      // Aircraft, which the national map has always drawn and this one never
+      // did. The local rail states a count -- "3 aircraft observed nearby" --
+      // so the map was contradicting its own sidebar by showing none.
+      //
+      // The arrow points along `track`, the heading the transponder reported at
+      // that moment. It is a bearing, not a path: we hold one position per
+      // aircraft per build, so there is nothing to draw a trajectory from and
+      // nothing here pretends otherwise.
+      layers.aircraft.clearLayers();
+      for (const plane of (zone && zone.aircraft) || []) {
+        if (plane.lat === null || plane.lat === undefined) continue;
+        L.marker([plane.lat, plane.lon], {
+          icon: L.divIcon({
+            className: '', iconSize: [20, 20], iconAnchor: [10, 10],
+            html: `<div class="plane" style="transform:rotate(${plane.track || 0}deg)">➤</div>`,
+          }),
+        }).bindPopup(`<b>${plane.callsign || labels.aircraft || 'Aéronef'}</b>`
+          + `<br><i>${labels.aircraftNote || ''}</i>`)
+          .addTo(layers.aircraft);
       }
     },
 

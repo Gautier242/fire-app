@@ -92,6 +92,7 @@ export const COPY = {
     layersToggle: 'Calques',
     chipFires: 'Feux détectés',
     chipWater: "Points d'eau — registre",
+    chipAircraft: 'Moyens aériens',
     chipHydrants: 'Bornes OSM — pas un registre',
     chipSpread: 'Propagation modélisée',
     chipClosures: 'Routes coupées',
@@ -177,6 +178,7 @@ export const COPY = {
     layersToggle: 'Layers',
     chipFires: 'Fires detected',
     chipWater: 'Water points — register',
+    chipAircraft: 'Air support',
     chipHydrants: 'OSM hydrants — not a register',
     chipSpread: 'Modelled spread',
     chipClosures: 'Closed roads',
@@ -495,8 +497,22 @@ function officialHere() {
   return officialNear(official, at(), (zone && zone.radius_km) || 50);
 }
 
+// Aircraft near this zone, from the national list. The zone payload carries only
+// a per-fire count, which is why the rail could say "3 aircraft observed nearby"
+// while the map showed none: there were never any positions in it to draw.
+function aircraftHere() {
+  const centre = at();
+  const radius = (zone && zone.radius_km) || 50;
+  return ((summary && summary.aircraft) || [])
+    .filter((p) => Number.isFinite(p.lat) && haversineKm(centre, p) <= radius);
+}
+
 function drawMap(d) {
-  view.drawLocal({ ...zone, closures: nearbyClosures() }, {
+  view.drawLocal({ ...zone, closures: nearbyClosures(), aircraft: aircraftHere() }, {
+    aircraft: lang === 'en' ? 'Aircraft' : 'Aéronef',
+    aircraftNote: lang === 'en'
+      ? 'Flying low near a fire. What it is doing is not confirmed.'
+      : "Vole bas près d'un feu. Son rôle n'est pas confirmé.",
     fire: lang === 'en' ? 'Heat detected by satellite' : 'Chaleur détectée par satellite',
     detections: lang === 'en' ? 'detections' : 'détections',
     lastSeen: lang === 'en' ? 'Last seen' : 'Vu à',
@@ -910,7 +926,7 @@ async function boot() {
   // wall of amber over half the streets on screen tells a reader nothing while
   // looking authoritative. The count and the caveat are in the rail either way, so
   // nothing is hidden; only the overlay waits to be asked for.
-  ['fires', 'spread', 'closures official', 'detail', 'evacuated', 'burnt']
+  ['fires', 'spread', 'closures official', 'detail', 'evacuated', 'burnt', 'aircraft']
     .forEach((n) => view.toggle(n, true));
 
   dates = availableDates(todayUTC(), 30);
