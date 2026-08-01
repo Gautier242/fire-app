@@ -42,6 +42,11 @@ BUDGETS_KB = {
     "fr/data/hydrants.json": SIDE_KB,
     "fr/data/flares.json": 50,
     "fr/data/relay.json": 50,
+    # The archived record, which grows by one small digest per day and never
+    # shrinks. At roughly 0.5 KB gzipped per day this holds about five years;
+    # when it trips, split it by year rather than dropping the early days,
+    # because the early days are the ones nothing upstream can reproduce.
+    "fr/data/timeline.json": 50,
     # Coverage rows only: eleven registers and their counts, no coordinates.
     # Comfortably under 1 KB, so this budget exists to catch the points coming
     # back rather than to leave room for growth.

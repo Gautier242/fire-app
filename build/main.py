@@ -183,6 +183,25 @@ def water_index(layer):
     return {"coverage": layer.get("coverage") or []}
 
 
+def publish_timeline(out, source=Path("archive/timeline.json")):
+    """Copy the archived record into the data the site serves.
+
+    The archive lives in git, which is the only store here a later build cannot
+    overwrite. public/ is rebuilt from nothing every half hour, so without this
+    the record would exist and be unreachable.
+
+    Absent on the first build, and after that only if the archive workflow has
+    never run. That is not an error: it means there is nothing to show yet.
+    """
+    source = Path(source)
+    if not source.exists():
+        return None
+    target = Path(out) / "timeline.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(source.read_text())
+    return target
+
+
 def write_side_file(out, name, fetcher):
     """Write a lazy-loaded layer, or leave the previous one alone.
 
@@ -414,6 +433,17 @@ def apply_france_extras(summary, session, out, previous_flares):
     else:
         print("WARNING: the water register is unavailable; the previous file keeps "
               "serving. That is not the absence of water")
+
+    # The archived record of every earlier day, carried into what the site
+    # serves. Written by the archive workflow into git, which is the one store
+    # here that rebuilding public/ cannot erase.
+    record = publish_timeline(out)
+    if record:
+        days = json.loads(record.read_text())
+        print(f"published {record} ({len(days['days'])} day(s), "
+              f"{days['first']} to {days['last']})")
+    else:
+        print("no archived timeline yet; the chronology page will say so")
 
     # Which zones already have somebody's surveyed perimeter. Derived from what was
     # actually fetched rather than from a hardcoded list, so a failed fetch correctly
