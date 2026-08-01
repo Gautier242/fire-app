@@ -58,7 +58,9 @@ async function loadJSON(url) {
   return response.json();
 }
 
-const COPY = {
+// Exported so the language tests can hold the strings against the HTML that
+// declares them. Nothing in the browser imports this.
+export const COPY = {
   fr: {
     lang: 'English', zonePick: 'Zone', back: 'Carte France', sources: 'Sources',
     loading: 'Chargement…', failed: 'Données indisponibles.',
@@ -81,6 +83,19 @@ const COPY = {
     evacUnavailable: 'Liste des communes évacuées indisponible. Cela ne veut pas dire qu\'il n\'y a aucun ordre.',
     burntArea: (km2, when) => `${km2} km² déjà brûlés`
       + (when ? ` (relevé du Département du ${when}).` : ' (relevé du Département).'),
+    // The map's own controls. Declared here and named in the HTML by data-t, so
+    // that adding a chip without a translation fails a test rather than shipping.
+    chipFires: 'Feux détectés',
+    chipSpread: 'Propagation modélisée',
+    chipClosures: 'Routes coupées',
+    chipDetail: 'Bâtiments et rues',
+    chipEvacuated: 'Communes évacuées',
+    chipBurnt: 'Déjà brûlé',
+    chipEgress: 'Routes vers le feu',
+    // IGN's own product name, so it is the same in both languages.
+    baseIgn: 'Plan IGN', baseSatellite: 'Satellite', basePlain: 'Sobre',
+    ariaBasemap: 'Fond de carte',
+    ariaFilm: "Choisir la date de l'image",
     trailChip: 'Chaleur sur 7 jours',
     trailUnavailable: 'Historique 7 jours indisponible.',
     dayLabel: 'Jour', dayAll: '7 jours',
@@ -139,6 +154,16 @@ const COPY = {
     evacUnavailable: 'The evacuated commune list is unavailable. That does not mean there is no order.',
     burntArea: (km2, when) => `${km2} km² already burnt`
       + (when ? ` (département survey of ${when}).` : ' (département survey).'),
+    chipFires: 'Fires detected',
+    chipSpread: 'Modelled spread',
+    chipClosures: 'Closed roads',
+    chipDetail: 'Buildings and streets',
+    chipEvacuated: 'Evacuated communes',
+    chipBurnt: 'Already burnt',
+    chipEgress: 'Roads toward the fire',
+    baseIgn: 'Plan IGN', baseSatellite: 'Satellite', basePlain: 'Plain',
+    ariaBasemap: 'Base map',
+    ariaFilm: 'Choose the image date',
     trailChip: 'Heat over 7 days',
     trailUnavailable: 'The 7-day history is unavailable.',
     dayLabel: 'Day', dayAll: '7 days',
@@ -737,6 +762,17 @@ async function loadDetail() {
 
 function applyLanguage() {
   document.documentElement.lang = lang;
+  // Every control that declares its own key, in one pass. The map's chips used to
+  // be relabelled one id at a time, which meant a chip added later was simply
+  // forgotten and stayed French for anyone reading the page in English.
+  document.querySelectorAll('[data-t]').forEach((el) => {
+    el.textContent = c()[el.dataset.t];
+  });
+  // A French accessible name under an English label is worse than either: the
+  // reader who depends on it is the one who cannot see the label.
+  document.querySelectorAll('[data-t-aria]').forEach((el) => {
+    el.setAttribute('aria-label', c()[el.dataset.tAria]);
+  });
   $('lang').textContent = c().lang;
   $('zone-label').textContent = c().zonePick;
   $('back-link').textContent = c().back;
@@ -744,16 +780,20 @@ function applyLanguage() {
   if ($('help-link')) $('help-link').textContent = c().help;
   if ($('pro-link')) $('pro-link').textContent = c().pro;
   $('skills-summary').textContent = c().skillsSummary;
-  $('opacity-label').textContent = c().opacityLabel;
   $('chrono-link').textContent = c().chrono;
-  $('scrub-label').textContent = c().scrubLabel;
   $('scrub-note').textContent = c().scrubNote;
-  $('day-label').textContent = c().dayLabel;
   $('day-note').textContent = c().dayNote;
   showImageryPurpose();
-  // The chip carries an unavailability message when a fetch failed, so it is only
-  // relabelled while it still reads as a working control.
-  if (trail !== false) $('chip-trail').querySelector('span').textContent = c().trailChip;
+  // Two controls say something other than their own label depending on state, so
+  // they are set after the sweep rather than by it.
+  //
+  // The trail chip carries an unavailability message when the fetch failed. The
+  // sweep would overwrite it with the working label, turning "we could not ask"
+  // into what looks like a week with no fire in it.
+  if (trail === false) {
+    $('chip-trail').querySelector('span').textContent = c().trailUnavailable;
+  }
+  applyClearLabel();
   // A hint already on screen follows the language. Re-deriving it costs nothing;
   // refetching it would cost Overpass a query.
   if (!$('detail-hint').hidden) {
@@ -905,8 +945,11 @@ async function boot() {
   await selectZone(chosen);
 }
 
-boot().catch((err) => {
-  $('headline').textContent = c().failed;
-  $('freshness-text').textContent = c().failed;
-  console.error(err);
-});
+// Importable in node for its strings; only the browser boots the page.
+if (typeof document !== 'undefined' && document.getElementById('map')) {
+  boot().catch((err) => {
+    $('headline').textContent = c().failed;
+    $('freshness-text').textContent = c().failed;
+    console.error(err);
+  });
+}

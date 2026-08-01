@@ -43,7 +43,9 @@ async function loadJSON(url) {
   return response.json();
 }
 
-const COPY = {
+// Exported so the language tests can hold the strings against the HTML that
+// declares them. Nothing in the browser imports this.
+export const COPY = {
   fr: {
     locate: 'Vérifier près de chez moi', checking: 'Vérification…',
     picker: 'Ou cherchez une adresse', hint: 'Adresse, ville ou village',
@@ -436,7 +438,10 @@ async function boot() {
   renderRail();
 }
 
-boot().catch((err) => {
-  $('freshness-text').textContent = c().failed;
-  console.error(err);
-});
+// Importable in node for its strings; only the browser boots the page.
+if (typeof document !== 'undefined' && document.getElementById('map')) {
+  boot().catch((err) => {
+    $('freshness-text').textContent = c().failed;
+    console.error(err);
+  });
+}

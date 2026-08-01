@@ -136,47 +136,48 @@
 
       <div class="toolbar" id="toolbar">
         <button class="chip" data-layer="fires" aria-pressed="true">
-          <i class="sw fire"></i><span>Feux détectés</span>
+          <i class="sw fire"></i><span data-t="chipFires">Feux détectés</span>
         </button>
         <button class="chip" data-layer="spread" aria-pressed="true">
-          <i class="sw hist"></i><span>Propagation modélisée</span>
+          <i class="sw hist"></i><span data-t="chipSpread">Propagation modélisée</span>
         </button>
         <button class="chip" data-layer="closures official" aria-pressed="true">
-          <i class="sw road"></i><span>Routes coupées</span>
+          <i class="sw road"></i><span data-t="chipClosures">Routes coupées</span>
         </button>
         <button class="chip" data-layer="detail" aria-pressed="true">
-          <i class="sw sat"></i><span>Bâtiments et rues</span>
+          <i class="sw sat"></i><span data-t="chipDetail">Bâtiments et rues</span>
         </button>
         <button class="chip" data-layer="evacuated" aria-pressed="true" id="chip-evacuated">
-          <i class="sw order"></i><span>Communes évacuées</span>
+          <i class="sw order"></i><span data-t="chipEvacuated">Communes évacuées</span>
         </button>
         <button class="chip" data-layer="burnt" aria-pressed="true" id="chip-burnt">
-          <i class="sw hist"></i><span>Déjà brûlé</span>
+          <i class="sw hist"></i><span data-t="chipBurnt">Déjà brûlé</span>
         </button>
         <button class="chip" data-layer="egress" aria-pressed="false" id="chip-egress">
-          <i class="sw road"></i><span>Routes vers le feu</span>
+          <i class="sw road"></i><span data-t="chipEgress">Routes vers le feu</span>
         </button>
         <button class="chip" data-layer="history" aria-pressed="false" id="chip-trail">
-          <i class="sw hist"></i><span>Chaleur sur 7 jours</span>
+          <i class="sw hist"></i><span data-t="trailChip">Chaleur sur 7 jours</span>
         </button>
 
         <button class="chip clear" id="clear-layers" type="button">
-          <span>Tout masquer</span>
+          <span data-t="clearLayers">Tout masquer</span>
         </button>
 
         <span class="chip hint" id="detail-hint" hidden></span>
 
         <div class="imagery-pick">
-          <select id="imagery" aria-label="Image satellite">
-            <option value="">Aucune image</option>
+          <select id="imagery" data-t-aria="imageryLabel" aria-label="Image satellite">
+            <option value="" data-t="noImagery">Aucune image</option>
           </select>
           <span class="pick-note" id="imagery-note"></span>
         </div>
 
-        <div class="seg basemap" id="basemap" role="group" aria-label="Fond de carte">
-          <button data-base="plan_ign" aria-pressed="true">Plan IGN</button>
-          <button data-base="imagery" aria-pressed="false">Satellite</button>
-          <button data-base="plain" aria-pressed="false">Sobre</button>
+        <div class="seg basemap" id="basemap" role="group"
+             data-t-aria="ariaBasemap" aria-label="Fond de carte">
+          <button data-base="plan_ign" aria-pressed="true" data-t="baseIgn">Plan IGN</button>
+          <button data-base="imagery" aria-pressed="false" data-t="baseSatellite">Satellite</button>
+          <button data-base="plain" aria-pressed="false" data-t="basePlain">Sobre</button>
         </div>
       </div>
 
@@ -186,16 +187,17 @@
            choice is made by looking. -->
       <div class="scrubber sheet" id="scrubber" hidden>
         <div class="scrub-head">
-          <span id="scrub-label">Date de l'image</span><b id="scrub-date"></b>
+          <span id="scrub-label" data-t="scrubLabel">Date de l'image</span><b id="scrub-date"></b>
         </div>
-        <div class="film" id="film" role="group" aria-label="Choisir la date de l'image"></div>
+        <div class="film" id="film" role="group"
+             data-t-aria="ariaFilm" aria-label="Choisir la date de l'image"></div>
         <!-- Resolution and how often the sensor looks: the two facts that decide
              whether a layer can answer the question being asked. -->
         <div class="sensor" id="sensor-facts" hidden>
           <b id="sensor-res"></b><span id="sensor-revisit"></span>
         </div>
         <label class="opacity" for="imagery-opacity">
-          <span id="opacity-label">Opacité</span>
+          <span id="opacity-label" data-t="opacityLabel">Opacité</span>
           <input type="range" id="imagery-opacity" min="0" max="100" value="85" step="5">
           <b id="opacity-value">85 %</b>
         </label>
@@ -204,7 +206,7 @@
 
       <div class="scrubber days" id="day-scrubber" hidden>
         <div class="scrub-head">
-          <span id="day-label">Jour</span><b id="day-date"></b>
+          <span id="day-label" data-t="dayLabel">Jour</span><b id="day-date"></b>
         </div>
         <input type="range" id="day" min="0" max="6" value="6" step="1">
         <div class="scrub-foot"><span id="day-note"></span></div>
@@ -214,7 +216,7 @@
            orange dot is a fire now or a fire on Tuesday, which is the difference
            between leaving and staying. -->
       <details class="legend" id="legend" open>
-        <summary id="legend-title">Légende</summary>
+        <summary id="legend-title" data-t="legendTitle">Légende</summary>
         <ul id="legend-list"></ul>
       </details>
     </div>

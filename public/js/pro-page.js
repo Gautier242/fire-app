@@ -58,7 +58,9 @@ export const MODELLED_NOTE = {
   en: 'Rothermel 1972, validated=false. Never validated against a real fire.',
 };
 
-const COPY = {
+// Exported so the language tests can hold the strings against the HTML that
+// declares them. Nothing in the browser imports this.
+export const COPY = {
   fr: {
     title: 'Vue opérationnelle',
     subtitle: 'Chiffres modélisés avec leur incertitude. Pas une surface publique.',
