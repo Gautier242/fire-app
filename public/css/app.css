@@ -111,6 +111,40 @@ body {
 }
 .btn-ghost:hover { color: var(--ink); border-color: var(--faint); }
 
+/* The language switch. A btn-ghost read as chrome and readers did not find it.
+   It is a real control now: accent border, ink text, a bigger tap target.
+
+   No flag. A flag names a country and this site is read in France by people who
+   do not read French — an English speaker in the Gironde is not looking for a
+   Union Jack, and the tricolore would offer them French. The button carries the
+   name of the language it switches to, written in that language, which is what
+   somebody who cannot read the current one can still recognise.
+
+   The globe is a mask rather than an <img>, so it inherits currentColor and
+   follows the light and dark palettes without a second asset. */
+.btn-lang {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--sans); font-size: 0.82rem; font-weight: 500;
+  background: var(--raised); color: var(--ink);
+  border: 1px solid var(--accent); border-radius: var(--r);
+  padding: 8px 12px; min-height: 40px; cursor: pointer;
+  white-space: nowrap;
+}
+.btn-lang::before {
+  content: ''; width: 15px; height: 15px; flex: none;
+  background: currentColor;
+  -webkit-mask: var(--globe) center / contain no-repeat;
+  mask: var(--globe) center / contain no-repeat;
+}
+.btn-lang:hover { background: var(--accent); color: var(--ground); }
+.btn-lang:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:root {
+  --globe: url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" \
+stroke="black" stroke-width="1.8"><circle cx="12" cy="12" r="9"/>\
+<ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3.4 9h17.2M3.4 15h17.2"/></svg>');
+}
+
 /* primary action — only shown before a location is known */
 .locate {
   margin: 20px; padding: 18px;
