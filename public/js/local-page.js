@@ -112,6 +112,7 @@ const COPY = {
     scrubLabel: "Date de l'image",
     scrubNote: 'Vignette hachurée : aucun passage ce jour-là. Choisissez une date sans nuages.',
     noPass: 'aucun passage ce jour-là',
+    opacityLabel: 'Opacité',
     detailHint: `Zoomez (niveau ${MIN_ZOOM}) pour voir bâtiments et rues.`,
     detailLoading: 'Chargement des bâtiments et rues…',
     detailEmpty: 'Bâtiments et rues indisponibles (service OpenStreetMap saturé). Réessayez dans un instant.',
@@ -167,6 +168,7 @@ const COPY = {
     scrubLabel: 'Image date',
     scrubNote: 'A hatched thumbnail means no pass that day. Pick a date without cloud.',
     noPass: 'no pass that day',
+    opacityLabel: 'Opacity',
     detailHint: `Zoom in (level ${MIN_ZOOM}) to see buildings and streets.`,
     detailLoading: 'Loading buildings and streets…',
     detailEmpty: 'Buildings and streets unavailable (OpenStreetMap service busy). Try again shortly.',
@@ -549,9 +551,17 @@ function applyClearLabel() {
 
 function showImageryPurpose() {
   const layer = currentLayer();
-  $('imagery-note').textContent = layer
-    ? layer.purpose[lang === 'en' ? 'en' : 'fr']
-    : c().imageryNote;
+  const key = lang === 'en' ? 'en' : 'fr';
+  $('imagery-note').textContent = layer ? layer.purpose[key] : c().imageryNote;
+  // Resolution and revisit, stated plainly. A reader choosing between a 375 m
+  // daily pass and a 30 m one every 8-16 days is choosing between "today but
+  // coarse" and "sharp but maybe last week", and nothing else on the page says
+  // which they are getting.
+  $('sensor-facts').hidden = !layer;
+  if (layer) {
+    $('sensor-res').textContent = layer.resolution;
+    $('sensor-revisit').textContent = layer.revisit[key];
+  }
 }
 
 // The date the reader is looking at, always one that exists.
@@ -569,6 +579,15 @@ function applyImagery() {
     button.setAttribute('aria-pressed', String(Number(button.dataset.i) === dateIndex));
   }
   view.setImagery(layer, date);
+}
+
+// The satellite sits over the basemap. Full opacity buries the IGN road names,
+// low opacity buries the smoke; which one a reader wants depends on what they
+// came to find out, so it is their dial.
+function applyOpacity() {
+  const percent = Number($('imagery-opacity').value);
+  $('opacity-value').textContent = `${percent} %`;
+  view.setImageryOpacity(percent / 100);
 }
 
 // One real tile per date, so a reader can see the cloud before choosing the
@@ -725,6 +744,7 @@ function applyLanguage() {
   if ($('help-link')) $('help-link').textContent = c().help;
   if ($('pro-link')) $('pro-link').textContent = c().pro;
   $('skills-summary').textContent = c().skillsSummary;
+  $('opacity-label').textContent = c().opacityLabel;
   $('scrub-label').textContent = c().scrubLabel;
   $('scrub-note').textContent = c().scrubNote;
   $('day-label').textContent = c().dayLabel;
@@ -835,6 +855,7 @@ async function boot() {
 
   $('imagery').onchange = () => { fillFilm(); applyImagery(); };
   $('film').onkeydown = filmKeys;
+  $('imagery-opacity').oninput = applyOpacity;
   $('day').oninput = applyTrail;
   $('lang').onclick = () => {
     lang = lang === 'fr' ? 'en' : 'fr';

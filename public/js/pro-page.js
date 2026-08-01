@@ -80,6 +80,15 @@ const COPY = {
       moisture: 'Humidité combustible', fuel: 'Combustible',
     },
     mean: 'moyen', gust: 'rafale',
+    map: {
+      waterPoint: "Point d'eau",
+      registerTier: 'Registre SDIS — zone réellement recensée',
+      crowdTier: 'OpenStreetMap — pas un registre',
+      capacityUnknown: 'Capacité inconnue',
+      noFlowGuarantee: "Un registre ne garantit ni le débit ni l'accès.",
+      crowdCaveat: "Recensement bénévole, complétude inconnue. Aucun point affiché ne veut pas dire aucune eau.",
+      kinds: { borne: 'Borne ou poteau', citerne: 'Citerne ou réserve', naturel: "Point d'aspiration" },
+    },
     none: '—', notStated: 'non indiqué par ce build',
     noProjection: 'non projeté : pas de vent utilisable',
     slopeZero: '0,0°',
@@ -127,6 +136,15 @@ const COPY = {
       moisture: 'Fuel moisture', fuel: 'Fuel',
     },
     mean: 'mean', gust: 'gust',
+    map: {
+      waterPoint: 'Water point',
+      registerTier: 'SDIS register — area actually surveyed',
+      crowdTier: 'OpenStreetMap — not a register',
+      capacityUnknown: 'Capacity unknown',
+      noFlowGuarantee: 'A register guarantees neither flow nor access.',
+      crowdCaveat: 'Volunteer-mapped, completeness unknown. No point shown does not mean no water.',
+      kinds: { borne: 'Hydrant', citerne: 'Tank or reserve', naturel: 'Draw point' },
+    },
     none: '—', notStated: 'not stated by this build',
     noProjection: 'not projected: no usable wind',
     slopeZero: '0.0°',
@@ -558,6 +576,20 @@ function render() {
     inHours: (h) => (lang === 'en' ? `in ${h} h` : `en ${h} h`),
     spreadCaveat: MODELLED_NOTE[lang === 'en' ? 'en' : 'fr'],
   });
+
+  // The water a crew can actually reach. Two layers, never one: the register
+  // points come from the zone file already narrowed to this radius, the crowd
+  // hydrants from their own national file filtered here. Nothing adds them.
+  const centre = zone && Number.isFinite(zone.lat) ? zone : null;
+  const radius = (zone && zone.radius_km) || 50;
+  const inRadius = (points) => (centre
+    ? (points || []).filter((p) => haversineKm(centre, p) <= radius)
+    : []);
+  view.drawWater({
+    register: ((zone && zone.water && zone.water.points) || [])
+      .filter((p) => p.tier !== 'crowd'),
+    crowd: hydrants && hydrants.available !== false ? inRadius(hydrants.points) : [],
+  }, c.map);
 }
 
 async function selectZone(id) {
@@ -569,7 +601,10 @@ async function selectZone(id) {
 async function boot() {
   view = createMap('map', { center: [46.6, 2.5], zoom: 6 });
   view.setBase('plan_ign');
-  ['fires', 'spread'].forEach((n) => view.toggle(n, true));
+  // Water is on by default here. This page exists for somebody deciding where
+  // to send a tender, and a layer they have to discover is a layer they will
+  // not have when it matters. The chips ship aria-pressed="true" to match.
+  ['fires', 'spread', 'water', 'hydrants'].forEach((n) => view.toggle(n, true));
 
   lang = load(LANG_KEY) || 'fr';
   $('lang').onclick = () => {
@@ -598,7 +633,10 @@ async function boot() {
   // inside the Gironde radius would take it from 2.9 KB gzipped to 40.0 KB.
   // Off the critical path, so it never blocks the numbers a responder came for,
   // and until it lands the crowd line reads as unavailable rather than as none.
-  loadJSON('data/hydrants.json').then((h) => { hydrants = h; if (zone) renderResources(); })
+  // Both the sentence and the markers: the fetch lands after the first render,
+  // so a redraw that only updated the text would leave the map claiming there
+  // is no crowd-mapped water when 2,992 points had just arrived.
+  loadJSON('data/hydrants.json').then((h) => { hydrants = h; if (zone) render(); })
     .catch(() => { hydrants = null; });
 
   const select = $('zone-select');

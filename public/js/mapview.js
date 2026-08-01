@@ -153,6 +153,13 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
     // Roads heading into the modelled spread. Its own group so a reader can drop a
     // modelled overlay without losing the observed closures underneath it.
     egress: L.layerGroup(),
+    // Water a crew can draw from, in two groups that are never merged. A
+    // register is complete for the area it covers, so an empty patch inside one
+    // means something; OpenStreetMap absence means nobody mapped that street.
+    // Two layer groups, two chips, two legend entries, two counts: the reader
+    // can never be shown a single total.
+    water: L.layerGroup(),
+    hydrants: L.layerGroup(),
     satellite: gibs,
     // Rain matters to a fire: it is the thing that stops one. RainViewer
     // publishes a free radar mosaic, refreshed roughly every ten minutes.
@@ -166,6 +173,12 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
   let youMarker = null;
   let imageryOverlay = null;
   let scarOverlay = null;
+  // Satellite imagery sits over the basemap, so it was held at 0.85 to keep the
+  // IGN road names legible underneath. That was a guess made for the reader:
+  // somebody comparing a burn scar against the streets wants the roads, and
+  // somebody reading smoke wants the picture opaque. It is a control now, and
+  // this is only its starting point.
+  let imageryOpacity = 0.85;
 
   // Where a fire is now outranks everything else on the map. Area washes -- an
   // evacuated commune, burnt ground -- are large and semi-opaque, so without this
@@ -212,7 +225,7 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
       imageryOverlay = null;
       if (!layer) return null;
       imageryOverlay = L.tileLayer(tileUrl(layer, date), {
-        maxNativeZoom: layer.maxNativeZoom, maxZoom: 19, opacity: 0.85,
+        maxNativeZoom: layer.maxNativeZoom, maxZoom: 19, opacity: imageryOpacity,
         attribution: layer.attribution,
       });
       imageryOverlay.addTo(map);
@@ -220,6 +233,14 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
         if (map.hasLayer(l) && l.bringToFront) l.bringToFront();
       });
       return imageryOverlay;
+    },
+
+    // Kept on the view rather than passed through setImagery, so changing the
+    // date or the sensor does not silently reset a reader's choice.
+    setImageryOpacity(value) {
+      imageryOpacity = Math.min(1, Math.max(0, Number(value)));
+      if (imageryOverlay) imageryOverlay.setOpacity(imageryOpacity);
+      return imageryOpacity;
     },
 
     // The département's own crisis picture: which roads are shut, which communes are
@@ -696,6 +717,53 @@ export function createMap(elementId, { center = CANADA_CENTRE, zoom = CANADA_ZOO
         }).bindPopup(`<b>${closure.road} — ${closure.place}</b><br>${closure.headline || ''}`)
           .addTo(layers.closures);
       }
+    },
+
+    // Where a crew can draw water, in two layers that are never added together.
+    //
+    // A register is a survey: somebody's job was to list every PEI in that
+    // commune, so a gap inside its area is information. OpenStreetMap is a
+    // crowd map: a gap means nobody walked down that street. Drawing them the
+    // same way would erase the only distinction that matters when a crew is
+    // deciding where to send a tender, so the register draws solid and filled
+    // and the crowd layer draws hollow and dashed.
+    //
+    // Points are pre-filtered to the zone radius by the build, so this draws
+    // what it is given.
+    drawWater({ register = [], crowd = [] } = {}, labels = {}) {
+      layers.water.clearLayers();
+      layers.hydrants.clearLayers();
+
+      const KINDS = labels.kinds || {};
+      const capacity = (point) => (point.capacity_m3
+        ? `${point.capacity_m3} m³`
+        : (labels.capacityUnknown || 'capacité inconnue'));
+
+      for (const point of register) {
+        if (point.lat === null || point.lat === undefined) continue;
+        L.circleMarker([point.lat, point.lon], {
+          radius: 5, color: '#1B6C8C', fillColor: '#3FA7CE',
+          weight: 2, fillOpacity: 0.95,
+        }).bindPopup(`<b>${KINDS[point.kind] || labels.waterPoint || 'Point d\'eau'}</b>`
+          + `<br>${labels.registerTier || 'Registre SDIS'}`
+          + `<br>${capacity(point)}`
+          + `<br><small>${labels.noFlowGuarantee || ''}</small>`)
+          .addTo(layers.water);
+      }
+
+      // Hollow, dashed, and smaller. A volunteer-mapped dot must not read as a
+      // surveyed one at a glance on a phone in daylight.
+      for (const point of crowd) {
+        if (point.lat === null || point.lat === undefined) continue;
+        L.circleMarker([point.lat, point.lon], {
+          radius: 4, color: '#7FB2C4', fillColor: 'transparent',
+          weight: 1.5, fillOpacity: 0, dashArray: '2,2',
+        }).bindPopup(`<b>${KINDS[point.kind] || labels.waterPoint || 'Point d\'eau'}</b>`
+          + `<br>${labels.crowdTier || 'OpenStreetMap — pas un registre'}`
+          + `<br><small>${labels.crowdCaveat || ''}</small>`)
+          .addTo(layers.hydrants);
+      }
+      return { register: register.length, crowd: crowd.length };
     },
 
     // Buildings and streets for the current viewport. Its own method rather than

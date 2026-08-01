@@ -277,6 +277,10 @@ dd.air { color: var(--air); }
 
 .sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
 .sw.fire  { background: var(--heat-2); border-radius: 50%; }
+/* Surveyed water is filled; crowd-mapped water is hollow. The swatches carry
+   the same distinction the markers do, so the legend and the map agree. */
+.sw.water-reg { background: #3FA7CE; border: 1.5px solid #1B6C8C; border-radius: 50%; }
+.sw.water-osm { background: none; border: 1.5px dashed #7FB2C4; border-radius: 50%; }
 .sw.order { border: 1.5px solid var(--danger); }
 .sw.alert { border: 1.5px solid var(--caution); }
 .sw.road  { background: var(--closure); }
@@ -359,6 +363,27 @@ dd.air { color: var(--air); }
 }
 .film button.nopass { opacity: 0.75; }
 .film .when { display: block; padding: 2px 0 3px; }
+
+.sensor {
+  display: flex; gap: 8px; align-items: baseline; margin-top: 8px;
+  font-family: var(--mono); font-size: 0.66rem; color: var(--faint);
+}
+.sensor[hidden] { display: none; }
+.sensor b { color: var(--ink); font-size: 0.75rem; }
+
+/* Satellite over basemap: at full opacity the IGN road names vanish, and at low
+   opacity the smoke does. Which one matters depends on the question, so it is
+   the reader's dial rather than ours. */
+.opacity {
+  display: flex; gap: 8px; align-items: center; margin-top: 7px;
+  font-family: var(--mono); font-size: 0.62rem; color: var(--faint);
+  text-transform: uppercase; letter-spacing: 0.09em;
+}
+.opacity input { flex: 1; accent-color: var(--heat-2); min-height: 22px; }
+.opacity b {
+  color: var(--ink); text-transform: none; letter-spacing: 0;
+  font-variant-numeric: tabular-nums; min-width: 3.1rem; text-align: right;
+}
 
 .plane {
   font-size: 17px; line-height: 1; color: var(--accent);

@@ -143,6 +143,15 @@
         <button class="chip" data-layer="spread" aria-pressed="true">
           <i class="sw hist"></i><span>Propagation modélisée †</span>
         </button>
+        <!-- Two chips, never one. A register is a survey and its gaps mean
+             something; OpenStreetMap's gaps mean nobody mapped that street.
+             They are never summed and never drawn alike. -->
+        <button class="chip" data-layer="water" aria-pressed="true">
+          <i class="sw water-reg"></i><span>Points d'eau — registre</span>
+        </button>
+        <button class="chip" data-layer="hydrants" aria-pressed="true">
+          <i class="sw water-osm"></i><span>Bornes OSM — pas un registre</span>
+        </button>
       </div>
     </div>
 

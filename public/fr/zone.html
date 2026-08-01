@@ -188,6 +188,16 @@
           <span id="scrub-label">Date de l'image</span><b id="scrub-date"></b>
         </div>
         <div class="film" id="film" role="group" aria-label="Choisir la date de l'image"></div>
+        <!-- Resolution and how often the sensor looks: the two facts that decide
+             whether a layer can answer the question being asked. -->
+        <div class="sensor" id="sensor-facts" hidden>
+          <b id="sensor-res"></b><span id="sensor-revisit"></span>
+        </div>
+        <label class="opacity" for="imagery-opacity">
+          <span id="opacity-label">Opacité</span>
+          <input type="range" id="imagery-opacity" min="0" max="100" value="85" step="5">
+          <b id="opacity-value">85 %</b>
+        </label>
         <div class="scrub-foot"><span id="scrub-note"></span></div>
       </div>
 

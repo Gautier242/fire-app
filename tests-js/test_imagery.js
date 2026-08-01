@@ -170,3 +170,33 @@ test('the imagery copy tells a reader to choose against cloud', () => {
   assert.match(page, /nuages|dégagée/, 'the French copy must mention cloud');
   assert.match(page, /cloud/, 'and the English copy');
 });
+
+// --- what each sensor actually gives you ------------------------------------
+
+test('every layer states its resolution and how often it looks', () => {
+  // "VIIRS NOAA-20 · 375 m · quotidien" crams three facts into a dropdown line.
+  // Resolution and revisit are the two that decide whether a layer can answer
+  // the question being asked, so they are their own fields and get their own
+  // line in the panel.
+  for (const layer of LAYERS) {
+    assert.ok(layer.resolution, `${layer.id} must state its ground resolution`);
+    assert.match(layer.resolution, /\d/, `${layer.id} resolution needs a number`);
+    for (const lang of ['fr', 'en']) {
+      const revisit = layer.revisit && layer.revisit[lang];
+      assert.ok(revisit, `${layer.id} must say how often it looks, in ${lang}`);
+      assert.ok(revisit.length > 8, `${layer.id} revisit in ${lang} is too terse`);
+    }
+  }
+});
+
+test('an undated layer never claims a revisit that implies it is current', () => {
+  // The annual composite and the IGN orthophoto are the two a reader is most
+  // likely to mistake for today. Their revisit line has to say so itself,
+  // because it sits next to six layers that genuinely are dated.
+  for (const layer of LAYERS.filter((l) => !l.dated)) {
+    for (const lang of ['fr', 'en']) {
+      assert.match(layer.revisit[lang], /composite|annuel|annual|campagne|flown|20\d\d|ans|years/i,
+        `${layer.id} revisit in ${lang} must say it is not today's picture`);
+    }
+  }
+});

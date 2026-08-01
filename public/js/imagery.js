@@ -34,6 +34,8 @@ const GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best';
 export const LAYERS = [
   {
     id: 'viirs_noaa20',
+    resolution: '375 m',
+    revisit: { fr: '1 passage de jour, vers 13 h 30 locale', en: 'One daytime pass, around 13:30 local' },
     purpose: {
       fr: 'Vue d\'ensemble de la fumée, mise à jour chaque jour.',
       en: 'Wide view of the smoke, refreshed daily.',
@@ -45,6 +47,8 @@ export const LAYERS = [
   },
   {
     id: 'viirs_snpp',
+    resolution: '375 m',
+    revisit: { fr: '1 passage de jour, ~50 min avant NOAA-20', en: 'One daytime pass, ~50 min ahead of NOAA-20' },
     purpose: {
       fr: 'Deuxième passage quotidien : utile si le premier était nuageux.',
       en: 'A second daily pass: useful when the first one was cloudy.',
@@ -56,6 +60,8 @@ export const LAYERS = [
   },
   {
     id: 'modis_terra',
+    resolution: '250 m',
+    revisit: { fr: '1 passage de jour, vers 10 h 30 locale', en: 'One daytime pass, around 10:30 local' },
     purpose: {
       fr: 'Le plus long recul dans le temps, pour comparer les semaines.',
       en: 'The longest reach back in time, to compare one week with another.',
@@ -67,6 +73,8 @@ export const LAYERS = [
   },
   {
     id: 'thermal',
+    resolution: '30 m',
+    revisit: { fr: 'Recalculé tous les 2 à 3 jours', en: 'Recomputed every 2 to 3 days' },
     purpose: {
       fr: 'Là où la végétation a disparu : la trace au sol après le passage du feu.',
       en: 'Where the vegetation has gone: the mark left on the ground after a fire.',
@@ -89,6 +97,8 @@ export const LAYERS = [
   },
   {
     id: 'landsat',
+    resolution: '30 m',
+    revisit: { fr: '1 passage tous les 8 à 16 jours', en: 'One pass every 8 to 16 days' },
     purpose: {
       fr: 'Assez net pour distinguer les parcelles, mais un passage tous les 16 jours.',
       en: 'Sharp enough to pick out fields, but only one pass every 16 days.',
@@ -103,6 +113,8 @@ export const LAYERS = [
   },
   {
     id: 's2cloudless',
+    resolution: '10 m',
+    revisit: { fr: 'Composite annuel 2020 — pas une image du jour', en: '2020 annual composite — not today\'s picture' },
     purpose: {
       fr: 'Le plus net pour reconnaître son quartier, mais pas daté du jour.',
       en: 'The sharpest for recognising your own streets, but not dated today.',
@@ -117,6 +129,8 @@ export const LAYERS = [
   },
   {
     id: 'ign_ortho',
+    resolution: '20 cm',
+    revisit: { fr: 'Campagne aérienne, refaite tous les 3 à 4 ans', en: 'Aerial survey, reflown every 3 to 4 years' },
     purpose: {
       fr: 'Photographie aérienne très détaillée, prise avant l\'incendie.',
       en: 'Very detailed aerial photography, taken before the fire.',
