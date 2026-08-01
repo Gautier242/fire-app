@@ -1,0 +1,107 @@
+name: archive
+
+# The sources do not remember. Every feed publishes current state: the Gironde
+# closures carry `since: null`, the evacuated communes carry no date, FIRMS
+# serves a rolling seven-day window. The départemental ArcGIS layers exist to
+# serve an emergency and will be taken down when it ends.
+#
+# So this writes the day down while it can still be read, into git history --
+# the one store in this project that the next build cannot overwrite. It reads
+# the published site rather than rebuilding, so it costs the upstream APIs
+# nothing and records exactly what was served to readers.
+
+on:
+  schedule:
+    # Twice a day. Once would miss a feed that was down at that hour, and the
+    # digest keeps the later reading of any given day.
+    - cron: '17 5,17 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Record what the site is serving today
+        env:
+          SITE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          python - <<'EOF'
+          import gzip, json, os, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          from build.archive import ARCHIVE, digest, merge_timeline, snapshot_paths
+
+          site = os.environ["SITE"]
+          today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+          def grab(path):
+              """The published file, or None. A source that did not answer must
+              reach digest() as None so the day records unknown, not zero."""
+              try:
+                  with urllib.request.urlopen(f"{site}/{path}", timeout=60) as r:
+                      return json.loads(r.read().decode())
+              except Exception as error:      # noqa: BLE001 - absence is the datum
+                  print(f"could not read {path}: {error}")
+                  return None
+
+          fr = grab("fr/data/summary.json")
+          gironde = grab("fr/data/gironde.json")
+          ca = grab("data/summary.json")
+
+          # Canada is the oldest surface here and the one that must not regress
+          # silently. If neither country answered, the site is down and there is
+          # nothing worth recording -- writing a row of nulls would put a fake
+          # outage in the permanent record.
+          if fr is None and ca is None:
+              raise SystemExit("neither summary could be read; recording nothing")
+
+          paths = snapshot_paths(today)
+          for key, payload in (("fr", fr), ("gironde", gironde), ("ca", ca)):
+              if payload is None:
+                  continue
+              path = paths[key]
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(gzip.compress(
+                  json.dumps(payload, separators=(",", ":")).encode(), 9))
+              print(f"wrote {path} ({path.stat().st_size / 1024:.1f} KB gzipped)")
+
+          index = ARCHIVE / "timeline.json"
+          existing = json.loads(index.read_text())["days"] if index.exists() else []
+          days = merge_timeline(existing, digest(today, fr=fr, gironde=gironde, ca=ca))
+          index.parent.mkdir(parents=True, exist_ok=True)
+          index.write_text(json.dumps(
+              {"generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+               "first": days[0]["date"], "last": days[-1]["date"], "days": days},
+              ensure_ascii=False, separators=(",", ":")))
+          print(f"timeline now covers {days[0]['date']} to {days[-1]['date']}, "
+                f"{len(days)} day(s)")
+          EOF
+
+      - name: Commit the day
+        run: |
+          git config user.name "fire-app archive"
+          git config user.email "noreply@github.com"
+          # The pathspec is on the commit as well as the add: `git add <paths>`
+          # does not scope a commit, and this runs unattended.
+          git add archive
+          if git diff --cached --quiet; then
+            echo "nothing changed today"
+            exit 0
+          fi
+          git commit -m "Archive $(date -u +%Y-%m-%d): the day as it was served" -- archive
+          # A build may have pushed while this ran. Rebase rather than force.
+          git pull --rebase origin main
+          git push origin HEAD:main

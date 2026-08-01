@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chronologie — Feux Près De Moi</title>
+  <meta name="description" content="Ce que nous avons relevé jour par jour : communes évacuées, routes coupées, périmètre brûlé. Un enregistrement, pas une reconstitution — les sources ne datent pas leurs entrées.">
+  <link rel="stylesheet" href="../css/app.css">
+  <style>
+    body { overflow: auto; }
+    .doc {
+      max-width: 44rem; margin: 0 auto; min-height: 100dvh;
+      border-right: 1px solid var(--line); border-left: 1px solid var(--line);
+    }
+    .doc-head { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+    .doc-head nav { display: flex; gap: 12px; align-items: center; }
+    .prose { padding: 22px 20px 4px; }
+    .prose h1 { margin: 0; font-size: 1.7rem; line-height: 1.22; letter-spacing: -0.022em; }
+    .prose p { margin: 9px 0 0; color: var(--muted); font-size: 0.97rem; }
+
+    /* The limits sit above the record, not under it. A reader who takes the
+       first row as the day the fire started has been misled by the page. */
+    .limits {
+      margin: 16px 20px 0; padding: 12px 14px;
+      border: 1px solid var(--line); border-left: 3px solid var(--caution);
+      border-radius: var(--r); background: var(--surface);
+      font-size: 0.88rem; color: var(--muted);
+    }
+
+    .days { padding: 6px 20px 0; }
+    .day { padding: 16px 0; border-top: 1px solid var(--line-soft); }
+    .day:first-child { border-top: none; }
+    .day h2 {
+      margin: 0; font-family: var(--mono); font-size: 0.82rem;
+      letter-spacing: 0.04em; color: var(--ink); font-variant-numeric: tabular-nums;
+    }
+    .ev { margin: 9px 0 0; padding-left: 13px; border-left: 2px solid var(--heat-2); }
+    .ev.lifted { border-left-color: var(--accent); }
+    .ev p { margin: 0; font-size: 0.93rem; }
+    .state { margin: 9px 0 0; font-size: 0.83rem; color: var(--faint); }
+    .state span { display: block; }
+    /* A day the feed was down is visibly a gap, never a quiet row of numbers. */
+    .day.gap h2 { color: var(--faint); }
+    .day.gap .state { color: var(--caution); }
+    .empty { padding: 20px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main class="rail doc">
+    <div class="rail-head doc-head">
+      <div class="brand">Feux<span>·</span>Près<span>·</span>De<span>·</span>Moi</div>
+      <nav>
+        <a class="btn-ghost" href="./" id="map-link">Voir la carte</a>
+        <button class="btn-ghost" id="lang">English</button>
+      </nav>
+    </div>
+
+    <div class="prose">
+      <h1 id="title">Chronologie</h1>
+      <p id="lede"></p>
+    </div>
+
+    <!-- Before the record, not after it. -->
+    <div class="limits" id="limits"></div>
+
+    <div class="days" id="days" aria-live="polite"></div>
+
+    <div class="rail-foot">
+      <a href="./" id="back-link">Carte France</a>
+      <a href="zone.html" id="zone-link">Vue locale</a>
+      <a href="sources.html" id="src-link">Sources</a>
+    </div>
+  </main>
+
+  <script type="module" src="../js/chronology-page.js"></script>
+</body>
+</html>
