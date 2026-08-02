@@ -909,3 +909,26 @@ dd.air { color: var(--air); }
 .rail-head .brand { order: 2; margin-right: auto; }
 .rail-head #rail-hide { order: 1; }
 .rail-head .btn-lang { order: 3; }
+
+/* Folded, a panel is exactly its label. Without this the layer bar kept the
+   full width it had been given and the legend kept its 34ch, so folding them
+   left a wide empty strip lying across the map doing nothing. */
+.toolbar:not([open]), .map .legend:not([open]) {
+  width: max-content !important;
+  height: auto !important;
+  min-width: 0; max-width: max-content;
+  overflow: visible;
+}
+/* The dragged class pins left/top; a panel re-anchored to the bottom must not
+   keep both, or it stretches between them. */
+.scrubber.dragged, .toolbar.dragged, .map .legend.dragged { right: auto; }
+
+/* Less shouting than the panel close buttons: this one is next to the wordmark
+   and permanent, not a control you hunt for in a hurry. Bolder and larger, but
+   no filled block. */
+#rail-hide {
+  background: none; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 5px;
+  font-size: 16px; font-weight: 700; width: 26px; height: 26px;
+}
+#rail-hide:hover { background: none; color: var(--accent); border-color: var(--accent); }

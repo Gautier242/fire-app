@@ -1021,6 +1021,18 @@ function makeDraggable(panel) {
     const drop = () => {
       head.removeEventListener('pointermove', move);
       head.removeEventListener('pointerup', drop);
+      // Anchor to the nearer horizontal edge. A panel held by its top grows
+      // downwards when it unfolds, which pushes it off the bottom of the map if
+      // that is where the reader parked it; held by its bottom it grows upwards.
+      const box = panel.getBoundingClientRect();
+      const map = panel.parentElement.getBoundingClientRect();
+      if (box.top + box.height / 2 > map.top + map.height / 2) {
+        panel.style.bottom = `${map.bottom - box.bottom}px`;
+        panel.style.top = 'auto';
+      } else {
+        panel.style.top = `${box.top - map.top}px`;
+        panel.style.bottom = 'auto';
+      }
     };
     head.addEventListener('pointermove', move);
     head.addEventListener('pointerup', drop);
@@ -1175,8 +1187,33 @@ async function boot() {
   document.querySelectorAll('.scrubber').forEach(makeResizable);
   wireFilmNav();
   // The rail folds away so the map can have the whole window.
-  $('rail-hide').onclick = () => { $('shell').dataset.rail = 'off'; view.invalidate(); };
-  $('rail-show').onclick = () => { $('shell').dataset.rail = ''; view.invalidate(); };
+  // Folding the rail changes how wide the map is, and every panel sized as a
+  // share of it moved or grew underneath the reader. Their geometry is pinned to
+  // pixels across the toggle so nothing but the rail changes.
+  const foldRail = (off) => {
+    const panels = [...document.querySelectorAll('.scrubber, #toolbar, .map .legend')];
+    const origin = () => document.querySelector('.map').getBoundingClientRect();
+    const before = origin();
+    const held = panels.map((panel) => {
+      const box = panel.getBoundingClientRect();
+      return { panel, left: box.left - before.left, top: box.top - before.top,
+               w: box.width, h: box.height };
+    });
+    $('shell').dataset.rail = off ? 'off' : '';
+    for (const item of held) {
+      item.panel.style.width = `${item.w}px`;
+      item.panel.style.height = `${item.h}px`;
+      // Only the ones already placed by hand get pinned; the rest keep the
+      // corner the stylesheet gave them so they stay anchored to their edge.
+      if (item.panel.classList.contains('dragged')) {
+        item.panel.style.left = `${item.left}px`;
+        item.panel.style.top = `${item.top}px`;
+      }
+    }
+    view.invalidate();
+  };
+  $('rail-hide').onclick = () => foldRail(true);
+  $('rail-show').onclick = () => foldRail(false);
   $('imagery').onchange = () => { fillFilm(); applyImagery(); };
   $('film').onkeydown = filmKeys;
   $('imagery-opacity').oninput = applyOpacity;
