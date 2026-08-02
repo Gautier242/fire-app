@@ -72,7 +72,6 @@ export const COPY = {
     // spread chip and the two water chips saying what they are and are not do
     // the same work in English: a modelled wedge must not read as observed, and
     // a crowd survey must not read as a register.
-    layersToggle: 'Calques',
     chipFires: 'Chaleur détectée',
     chipSpread: 'Propagation modélisée †',
     chipWater: "Points d'eau — registre",
@@ -133,7 +132,6 @@ export const COPY = {
     loading: 'Loading…', failed: 'Data unavailable.',
     updated: (m) => `Updated ${m} min ago`,
     modelTitle: 'What the model is worth',
-    layersToggle: 'Layers',
     chipFires: 'Heat detected',
     chipSpread: 'Modelled spread †',
     chipWater: 'Water points — register',

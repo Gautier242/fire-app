@@ -89,10 +89,8 @@ export const COPY = {
       + (when ? ` (relevé du Département du ${when}).` : ' (relevé du Département).'),
     // The map's own controls. Declared here and named in the HTML by data-t, so
     // that adding a chip without a translation fails a test rather than shipping.
-    layersToggle: 'Calques',
     filmPrev: 'Images précédentes', filmNext: 'Images suivantes',
-    closePanel: 'Fermer', railHide: 'Masquer le panneau', railShow: 'Afficher le panneau',
-    railShowLabel: 'Vue·Locale »',
+    closePanel: 'Fermer',
     chipFires: 'Feux détectés',
     chipWater: "Points d'eau — registre",
     chipAircraft: 'Moyens aériens',
@@ -178,10 +176,8 @@ export const COPY = {
     evacUnavailable: 'The evacuated commune list is unavailable. That does not mean there is no order.',
     burntArea: (km2, when) => `${km2} km² already burnt`
       + (when ? ` (département survey of ${when}).` : ' (département survey).'),
-    layersToggle: 'Layers',
     filmPrev: 'Earlier images', filmNext: 'Later images',
-    closePanel: 'Close', railHide: 'Hide the panel', railShow: 'Show the panel',
-    railShowLabel: 'Vue·Locale »',
+    closePanel: 'Close',
     chipFires: 'Fires detected',
     chipWater: 'Water points — register',
     chipAircraft: 'Air support',
@@ -900,14 +896,6 @@ export const THUMB_W = 54;
 export const THUMB_GAP = 5;
 export const SHEET_CHROME = 88;
 
-// Whether a box is worth holding across a rail fold. A hidden panel measures
-// 0x0, and a panel pinned to zero comes back at the stylesheet's minimum instead
-// of its default -- the reader sees a 224px stub where the contact sheet should
-// be. Nothing invisible has geometry worth preserving.
-export function holdsGeometry(box) {
-  return box.width > 0 && box.height > 0;
-}
-
 // The floor a panel may not be resized below, measured from what it is holding
 // rather than picked as a constant. Shrinking past this hid controls: chips and
 // legend rows do not wrap inside themselves, so a panel narrower than its widest
@@ -1205,65 +1193,13 @@ async function boot() {
 
   $('scrub-close').onclick = closeImagery;
   $('day-close').onclick = closeTrail;
-  document.querySelectorAll('.scrubber, #toolbar, .map .legend').forEach(makeDraggable);
-  // Only the two scrubbers resize. Layers and legend hold a fixed set of
-  // controls that must all stay reachable, so they fold and move but keep the
-  // size the layout gives them.
+  // Only the two scrubbers move and resize. The layer chips and the legend sit
+  // where the stylesheet puts them: giving them the same treatment gathered the
+  // chips into a slab across the top of the map and pushed the legend out of the
+  // corner Leaflet leaves free, which cost more than the flexibility was worth.
+  document.querySelectorAll('.scrubber').forEach(makeDraggable);
   document.querySelectorAll('.scrubber').forEach(makeResizable);
   wireFilmNav();
-  // The rail folds away so the map can have the whole window.
-  // Folding the rail changes how wide the map is, and every panel sized as a
-  // share of it moved or grew underneath the reader. Their geometry is pinned to
-  // pixels across the toggle so nothing but the rail changes.
-  const foldRail = (off) => {
-    const panels = [...document.querySelectorAll('.scrubber, #toolbar, .map .legend')];
-    const origin = () => document.querySelector('.map').getBoundingClientRect();
-    const before = origin();
-    // Only what is actually on screen. A hidden panel measures 0x0, and pinning
-    // that wrote `width: 0` onto it: the satellite sheet and the day slider then
-    // opened at the 224x64 floor the stylesheet enforces, showing two thumbnails
-    // of fourteen. Folding the rail once before ever opening a panel was enough
-    // to do it, which is why the panels looked far too small however wide their
-    // default was made. A panel that is not showing has no geometry worth
-    // keeping.
-    const held = panels.filter((panel) => holdsGeometry(panel.getBoundingClientRect()))
-      .map((panel) => {
-        const box = panel.getBoundingClientRect();
-        return { panel, left: box.left - before.left, top: box.top - before.top,
-                 w: box.width, h: box.height };
-      });
-    $('shell').dataset.rail = off ? 'off' : '';
-    for (const item of held) {
-      item.panel.style.width = `${item.w}px`;
-      item.panel.style.height = `${item.h}px`;
-      // Only the ones already placed by hand get pinned; the rest keep the
-      // corner the stylesheet gave them so they stay anchored to their edge.
-      if (item.panel.classList.contains('dragged')) {
-        item.panel.style.left = `${item.left}px`;
-        item.panel.style.top = `${item.top}px`;
-      }
-    }
-    view.invalidate();
-  };
-  $('rail-hide').onclick = () => foldRail(true);
-  $('rail-show').onclick = () => foldRail(false);
-  // A folded <details> reports the box of its summary alone. foldRail pins every
-  // panel to pixels so the rail toggle cannot resize them underneath the reader,
-  // and pinning one while it was folded nailed it shut: the inline height stayed
-  // in force when it reopened, so the layers list and the legend came back 64px
-  // tall with their contents clipped and no way to get them back.
-  //
-  // The size a panel had while folded says nothing about the size it needs while
-  // open, so opening or closing one drops the pin and lets the browser measure it
-  // again. Only width and height are released -- where the reader dragged the
-  // panel is theirs and is left alone. Neither of these two is resizable, so
-  // there is no hand-set size here to lose.
-  for (const panel of document.querySelectorAll('details.toolbar, details.legend')) {
-    panel.addEventListener('toggle', () => {
-      panel.style.width = '';
-      panel.style.height = '';
-    });
-  }
   $('imagery').onchange = () => { fillFilm(); applyImagery(); };
   $('film').onkeydown = filmKeys;
   $('imagery-opacity').oninput = applyOpacity;

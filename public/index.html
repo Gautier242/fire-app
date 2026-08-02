@@ -52,41 +52,37 @@
     <div class="map">
       <div id="map"></div>
 
-      <details class="toolbar" id="toolbar" open>
-        <summary data-t="layers_toggle">Layers</summary>
-        <div class="toolbar-body">
-          <button class="chip" data-layer="fires" aria-pressed="true">
-            <i class="sw fire"></i><span data-t="layer_fires">Fires</span>
-          </button>
-          <button class="chip" data-layer="orders" aria-pressed="true">
-            <i class="sw order"></i><span data-t="layer_orders">Evacuation orders</span>
-          </button>
-          <button class="chip" data-layer="alerts" aria-pressed="true">
-            <i class="sw alert"></i><span data-t="layer_alerts">Alerts</span>
-          </button>
-          <button class="chip" data-layer="aqhi" aria-pressed="true" data-adv>
-            <i class="sw aqhi"></i><span data-t="aqhi_heading">Air quality</span>
-          </button>
-          <button class="chip" data-layer="closures" aria-pressed="true" data-adv>
-            <i class="sw road"></i><span data-t="layer_closures">Road closures</span>
-          </button>
-          <button class="chip" data-layer="aircraft" aria-pressed="true" data-adv hidden>
-            <i class="sw plane"></i><span data-t="layer_aircraft">Aircraft over fires</span>
-          </button>
-          <button class="chip" data-layer="history" aria-pressed="false" data-adv hidden>
-            <i class="sw hist"></i><span data-t="layer_history">72-hour spread</span>
-          </button>
-          <button class="chip" data-layer="satellite" aria-pressed="false" data-adv>
-            <i class="sw sat"></i><span data-t="layer_satellite">Today's satellite pass</span>
-          </button>
+      <div class="toolbar" id="toolbar">
+        <button class="chip" data-layer="fires" aria-pressed="true">
+          <i class="sw fire"></i><span data-t="layer_fires">Fires</span>
+        </button>
+        <button class="chip" data-layer="orders" aria-pressed="true">
+          <i class="sw order"></i><span data-t="layer_orders">Evacuation orders</span>
+        </button>
+        <button class="chip" data-layer="alerts" aria-pressed="true">
+          <i class="sw alert"></i><span data-t="layer_alerts">Alerts</span>
+        </button>
+        <button class="chip" data-layer="aqhi" aria-pressed="true" data-adv>
+          <i class="sw aqhi"></i><span data-t="aqhi_heading">Air quality</span>
+        </button>
+        <button class="chip" data-layer="closures" aria-pressed="true" data-adv>
+          <i class="sw road"></i><span data-t="layer_closures">Road closures</span>
+        </button>
+        <button class="chip" data-layer="aircraft" aria-pressed="true" data-adv hidden>
+          <i class="sw plane"></i><span data-t="layer_aircraft">Aircraft over fires</span>
+        </button>
+        <button class="chip" data-layer="history" aria-pressed="false" data-adv hidden>
+          <i class="sw hist"></i><span data-t="layer_history">72-hour spread</span>
+        </button>
+        <button class="chip" data-layer="satellite" aria-pressed="false" data-adv>
+          <i class="sw sat"></i><span data-t="layer_satellite">Today's satellite pass</span>
+        </button>
 
-          <div class="seg basemap" id="basemap" role="group" aria-label="Base map">
-            <button data-base="plain" aria-pressed="true" data-t="base_map">Map</button>
-            <button data-base="imagery" aria-pressed="false" data-t="base_satellite">Satellite</button>
-          </div>
-      
+        <div class="seg basemap" id="basemap" role="group" aria-label="Base map">
+          <button data-base="plain" aria-pressed="true" data-t="base_map">Map</button>
+          <button data-base="imagery" aria-pressed="false" data-t="base_satellite">Satellite</button>
         </div>
-      </details>
+      </div>
 
       <div class="scrubber" id="scrubber" hidden>
         <div class="scrub-head">

@@ -361,47 +361,13 @@ dd.air { color: var(--air); }
    top of the terrain they control. Grouping them into a single surface anchored
    top-left leaves the map legible, gives the legend the opposite corner, and
    reads as one instrument instead of scattered confetti. */
+/* The chips sit straight on the map, each carrying its own surface. Gathering
+   them into one panel put a slab across the top of the map covering 205px of the
+   terrain they control, which is worse than the confetti it replaced. */
 .toolbar {
   position: absolute; z-index: 500;
-  top: var(--s-3); left: var(--s-3);
-  /* Never the full width: the right-hand side belongs to the legend. */
-  max-width: min(56ch, calc(100% - 38ch));
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(9px);
-  border: 1px solid var(--line); border-radius: var(--r);
-}
-/* Folded away, the panel is just its own button and the map has the screen.
-
-   A <details> rather than a scripted panel: the browser already owns the open
-   state, the keyboard behaviour and the accessible name, and this file's legend
-   and skills list are written the same way. Nothing to wire, nothing to break
-   when JS has not loaded yet -- which on this page is a state a reader can
-   actually be in. */
-.toolbar > summary {
-  display: flex; align-items: center; gap: var(--s-2);
-  padding: var(--s-2) var(--s-3); min-height: 32px; cursor: pointer;
-  font-family: var(--mono); font-size: var(--t-sm);
-  text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted);
-  list-style: none;
-}
-.toolbar > summary::-webkit-details-marker { display: none; }
-.toolbar > summary:hover { color: var(--ink); }
-/* A triangle that turns, so open and closed are legible without reading. */
-.toolbar > summary::before {
-  content: ''; flex: none;
-  border: 4px solid transparent; border-left-color: currentColor;
-  transform: translateX(1px);
-}
-.toolbar[open] > summary::before {
-  border-left-color: transparent; border-top-color: currentColor;
-  transform: translateY(2px);
-}
-.toolbar[open] > summary { border-bottom: 1px solid var(--line-soft); }
-/* Closed, it shrinks to the button rather than holding the panel's width open. */
-.toolbar:not([open]) { max-width: max-content; }
-.toolbar-body {
-  display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: center;
-  padding: var(--s-1);
+  top: 13px; left: 13px; right: 13px;
+  display: flex; flex-wrap: wrap; gap: 7px; align-items: flex-start;
 }
 
 .chip {
@@ -673,7 +639,6 @@ dd.air { color: var(--air); }
     border-radius: 0; border-left: none; border-right: none; border-top: none;
     backdrop-filter: none;
   }
-  .toolbar:not([open]) { max-width: none; }
   .map { display: flex; flex-direction: column; }
   #map { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; }
 
@@ -693,6 +658,13 @@ dd.air { color: var(--air); }
    slider is what a reader drags to pick a day, and 340px gave each of fourteen
    days 24px of travel. */
 .scrubber.days { bottom: 4.6rem; width: min(460px, calc(100% - 26px)); }
+/* Both panels were anchored to the same corner at the same offset -- 74px against
+   4.6rem, which is 73.6px -- so opening the trail while an image was chosen laid
+   one exactly over the other and the contact sheet vanished behind it. The day
+   panel steps above the sheet, but only while the sheet is actually showing:
+   alone, it keeps the corner. The sheet is 220px tall with its strip, head and
+   opacity row; a reader who resizes it taller can drag either one. */
+#scrubber:not([hidden]) ~ #day-scrubber { bottom: 306px; }
 /* Sits directly over the street map, so it needs its own background: unbacked grey
    text on top of place names is unreadable, and this line is the one that tells a
    reader which satellite layer to choose. */
@@ -716,19 +688,11 @@ dd.air { color: var(--air); }
    bar bottom-right, and the scale bar was drawing straight through the legend
    text -- "10 km" printed across "Closed road (other cause)". */
 .map .legend {
-  /* Bottom-left, opening upwards: the top belongs to the layer bar now, and
-     anchoring by the bottom edge means unfolding grows away from the edge
-     instead of pushing the panel off it. */
-  position: absolute; left: var(--s-3); bottom: var(--s-3); z-index: 500;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(9px);
-  border: 1px solid var(--line);
-  border-radius: var(--r); padding: var(--s-2) var(--s-3);
-  font-size: var(--t-md);
-  /* Wide enough that no legend row wraps. Every row is a colour and the thing it
-     means; a wrapped row reads as two entries and this legend is what separates
-     a fire burning now from one that burned on Tuesday. */
-  max-width: 34ch;
+  /* Clear of Leaflet's zoom buttons and scale bar, which both sit bottom-right. */
+  position: absolute; right: 3.4rem; bottom: .6rem; z-index: 500;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: .4rem .6rem; font-size: .78rem;
+  max-width: 24ch;
 }
 /* Open by default. A collapsed legend is a legend nobody reads, and the colours it
    explains are the difference between a fire now and a fire on Tuesday. */
@@ -789,14 +753,14 @@ dd.air { color: var(--air); }
   margin-left: auto; flex: none;
   width: 24px; height: 24px; padding: 0; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
-  /* A filled light square, not a bare glyph. At --faint on a dark panel the
-     cross was there and effectively invisible; a close control has to read as a
-     control before anybody looks for it. */
-  background: var(--ink); color: var(--surface);
+  /* A bold cross carrying its own weight, not a filled square. The square read
+     as a second panel sitting inside the header; the glyph has to be heavy
+     enough to be found without one. */
+  background: none; color: var(--ink);
   border: none; border-radius: 5px;
-  font-family: var(--sans); font-size: 15px; font-weight: 500; line-height: 1;
+  font-family: var(--sans); font-size: 21px; font-weight: 700; line-height: 1;
 }
-.panel-close:hover { background: var(--danger); color: #fff; }
+.panel-close:hover { color: var(--danger); }
 .panel-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Resizable with the browser's own grip rather than a drag implementation:
@@ -807,20 +771,15 @@ dd.air { color: var(--air); }
    rather than clipping it. The browser's own `resize` grip only ever offers the
    bottom-right corner, which is both hard to find and useless when the panel
    wants to grow leftwards, so the edges are ours. */
-.scrubber, .toolbar, .map .legend {
+/* Only the two scrubbers. The layer chips and the legend sit where the stylesheet
+   puts them and are not moved or resized by hand -- giving them this treatment is
+   what turned the chips into a slab over the map and pushed the legend out of its
+   corner. */
+.scrubber {
   overflow: auto;
   min-width: 14rem; min-height: 4rem;
   max-width: calc(100% - var(--s-6)); max-height: 82dvh;
 }
-/* Restated after the shared rule above, which was overriding it and letting the
-   layers panel span the whole map. The right-hand side belongs to the legend. */
-/* Across the top, nearly the full width: the layer chips are the control a
-   reader uses most and wrapping them into a tall block buried the later ones. */
-.toolbar { min-width: 0; max-width: calc(100% - var(--s-6)); }
-/* Same restatement, same reason: the shared rule above was widening the legend
-   from 34ch to the width of the map the moment it was moved. */
-.map .legend { max-width: 34ch; }
-.toolbar-body { overflow: auto; }
 
 /* Eight grab zones, invisible until wanted. 6px is the smallest that a pointer
    reliably lands on without the panel edge becoming a trap for ordinary clicks. */
@@ -862,84 +821,21 @@ dd.air { color: var(--air); }
 .film::-webkit-scrollbar-thumb { background: var(--faint); border-radius: 5px; }
 /* The drag handle: the panel header. Moved by JS because CSS cannot reposition
    an element from a pointer, but the affordance is stated here. */
-.scrubber, .toolbar, .map .legend { position: absolute; }
+.scrubber { position: absolute; }
 .scrub-head { cursor: move; user-select: none; }
 .scrubber.dragged { bottom: auto; right: auto; }
 
-/* The rail folds away too, so the map can have the whole window on a laptop. */
-/* Reopening the rail was a 28px guillemet against the map and people could not
-   find it, so folding the panel away read as losing it. It carries the page's
-   own name now, set vertically along the edge it will restore. */
-.rail-toggle {
-  position: absolute; z-index: 600; top: 50%; transform: translateY(-50%); left: 0;
-  width: 30px; min-height: 150px; padding: var(--s-3) 0; cursor: pointer;
-  display: none; align-items: center; justify-content: center; gap: var(--s-2);
-  writing-mode: vertical-rl;
-  font-family: var(--mono); font-size: var(--t-sm);
-  letter-spacing: 0.14em; text-transform: uppercase;
-  border-radius: 0 var(--r) var(--r) 0;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(9px);
-  border: 1px solid var(--line); border-radius: var(--r);
-  color: var(--muted); font-family: var(--mono); font-size: var(--t-md);
-}
-.rail-toggle:hover { color: var(--ink); }
-/* One column, not "0 1fr". The rail is display:none when folded, so it leaves
-   the grid entirely and the map became the FIRST child -- landing in the 0-width
-   track and rendering at zero pixels wide. */
-.shell[data-rail="off"] { grid-template-columns: 1fr; }
-.shell[data-rail="off"] .rail { display: none; }
-.shell[data-rail="off"] .rail-toggle { display: inline-flex; }
-/* The reopen button used to push the toolbar 36px sideways to make room, so
-   folding the rail moved a control the reader was aiming at. The button gives way
-   instead: it sits in the clear band between the toolbar along the top and the
-   legend at the bottom, and its z-index keeps it clickable if a dragged panel is
-   parked over it. Nothing else moves when the rail folds. */
 @media (max-width: 860px) {
   /* Dragging and resizing a panel around a 390px screen is not a gesture
      anybody wants; on a phone the panels stay where the layout puts them. */
-  .scrubber, .toolbar, .map .legend {
+  .scrubber {
     position: static; min-width: 0; max-width: none; max-height: none;
   }
   .grip { display: none; }
   .scrub-head { cursor: default; }
 }
 
-/* Same treatment as the panel close buttons, for the same reason: as a btn-ghost
-   this sat at --muted next to the wordmark and read as decoration. */
-#rail-hide {
-  flex: none; width: 24px; height: 24px; padding: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--ink); color: var(--surface);
-  border: none; border-radius: 5px;
-  font-family: var(--sans); font-size: 14px; font-weight: 600; line-height: 1;
-}
-#rail-hide:hover { background: var(--accent); color: var(--ground); }
-.rail-head { gap: var(--s-2); }
-/* The wordmark keeps the middle; the fold button sits against it on the left. */
-.rail-head .brand { order: 2; margin-right: auto; }
-.rail-head #rail-hide { order: 1; }
-.rail-head .btn-lang { order: 3; }
-
-/* Folded, a panel is exactly its label. Without this the layer bar kept the
-   full width it had been given and the legend kept its 34ch, so folding them
-   left a wide empty strip lying across the map doing nothing. */
-.toolbar:not([open]), .map .legend:not([open]) {
-  width: max-content !important;
-  height: auto !important;
-  min-width: 0; max-width: max-content;
-  overflow: visible;
-}
 /* The dragged class pins left/top; a panel re-anchored to the bottom must not
    keep both, or it stretches between them. */
-.scrubber.dragged, .toolbar.dragged, .map .legend.dragged { right: auto; }
+.scrubber.dragged { right: auto; }
 
-/* Less shouting than the panel close buttons: this one is next to the wordmark
-   and permanent, not a control you hunt for in a hurry. Bolder and larger, but
-   no filled block. */
-#rail-hide {
-  background: none; color: var(--muted);
-  border: 1px solid var(--line); border-radius: 5px;
-  font-size: 16px; font-weight: 700; width: 26px; height: 26px;
-}
-#rail-hide:hover { background: none; color: var(--accent); border-color: var(--accent); }

@@ -1,5 +1,5 @@
-// The floating panels open at a size the reader can use, and folding the rail
-// does not move or nail them shut.
+// The floating panels open at a size the reader can use, and the map's own
+// chrome stays out of the way of the map.
 //
 // None of this can be asserted against a live DOM: the suite is stdlib node with
 // no jsdom, and adding one is a dependency this repo does not take. So what is
@@ -10,11 +10,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import {
-  FILM_DATES, THUMB_W, THUMB_GAP, SHEET_CHROME, holdsGeometry,
-} from '../public/js/local-page.js';
+import { FILM_DATES, THUMB_W, THUMB_GAP, SHEET_CHROME } from '../public/js/local-page.js';
 
 const CSS = readFileSync('public/css/app.css', 'utf8');
+const ZONE = readFileSync('public/fr/zone.html', 'utf8');
 
 // The contact sheet's whole purpose is comparing days against each other: cloud
 // is what a reader is choosing around, and they cannot choose against a strip
@@ -28,7 +27,7 @@ test('the contact sheet opens wide enough to hold every date it offers', () => {
     `--sheet-w must hold ${FILM_DATES} thumbnails (${needed}px), not ${declared[1]}px`);
 });
 
-// 1036 px is the widest a panel may be on a 1440 px window with the rail open
+// 1036 px is the widest a panel may be on a 1440 px window with the rail showing
 // (map 1060, max-width calc(100% - 24px)). A default that cannot fit inside that
 // would open clipped on the machine the owner actually uses.
 test('the default sheet width fits the space a 1440px window actually gives it', () => {
@@ -44,22 +43,43 @@ test('the sheet width yields to a narrow map instead of overflowing it', () => {
     '.scrubber.sheet must clamp its declared width against the available space');
 });
 
-// Folding the rail pins every visible panel to pixels so the toggle cannot resize
-// them underneath the reader. A hidden panel measures 0x0, and pinning that wrote
-// `width: 0` onto it, so the satellite sheet later opened at the 224x64 floor
-// instead of its default -- two thumbnails of fourteen. Folding the rail once
-// before opening a panel was enough to trigger it.
-test('a panel that is not on screen is not pinned across a rail fold', () => {
-  assert.equal(holdsGeometry({ width: 0, height: 0 }), false, 'a hidden panel');
-  assert.equal(holdsGeometry({ width: 909, height: 0 }), false, 'a collapsed panel');
-  assert.equal(holdsGeometry({ width: 909, height: 234 }), true, 'a panel on screen');
+// Only the two scrubbers float. Giving the layer chips and the legend the same
+// movable-panel treatment gathered the chips into a surface that covered 205px of
+// the map along its whole width, and moved the legend out of the corner Leaflet
+// leaves free. The chips are the control a reader uses most and they belong on
+// the map, not in a box on top of it.
+test('the layer chips and the legend are not floating panels', () => {
+  assert.doesNotMatch(CSS, /^\.scrubber,\s*\.toolbar,\s*\.map \.legend\s*{/m,
+    'the toolbar and legend must not share the scrubbers\' panel rules');
+  assert.doesNotMatch(ZONE, /<details[^>]*class="toolbar"/,
+    'the layer bar must be a plain container, not a foldable panel');
+  assert.match(ZONE, /<div class="toolbar" id="toolbar">/,
+    'the layer bar must be a plain div');
 });
 
-// Folding the rail widens the map, and the toolbar was being shoved sideways to
-// clear the reopen button. A control that jumps 36 px when the reader folds an
-// unrelated panel reads as a bug, and the reader loses the chip they were aiming
-// at. The button moves out of the way instead.
-test('folding the rail does not shift the toolbar sideways', () => {
-  assert.doesNotMatch(CSS, /\[data-rail="off"\]\s*\.toolbar\s*{[^}]*left:/,
-    'the toolbar must keep its position when the rail folds');
+// Leaflet puts both the zoom buttons and the scale bar bottom-right, and the
+// scale bar drew straight through the legend text once already -- "10 km"
+// printed across "Route coupée (autre cause)".
+test('the legend keeps the corner that clears Leaflet controls', () => {
+  const rule = CSS.match(/\.map \.legend\s*{([^}]*)}/);
+  assert.ok(rule, '.map .legend must be declared');
+  assert.match(rule[1], /right:\s*3\.4rem/, 'the legend sits clear of the zoom buttons');
+  assert.match(rule[1], /bottom:/, 'the legend is anchored to the bottom edge');
+});
+
+// A close control has to read as a control, but the filled block read as a second
+// panel sitting inside the header. The glyph carries the weight instead.
+test('the panel close button is a bold glyph rather than a filled block', () => {
+  const rule = CSS.match(/\.panel-close\s*{([^}]*)}/);
+  assert.ok(rule, '.panel-close must be declared');
+  assert.match(rule[1], /background:\s*none/, 'no filled background behind the cross');
+  assert.match(rule[1], /font-weight:\s*[6-9]00/, 'the cross must be bold enough to find');
+});
+
+// The day slider spans its panel. It had no width rule and fell back to the
+// browser default, so it stopped halfway across and looked as though it had more
+// travel left than it did -- on a control that picks which day's heat is drawn.
+test('both scrubber sliders span the full width of their panel', () => {
+  assert.match(CSS, /#scrub,\s*#day\s*{[^}]*width:\s*100%/,
+    'the image and day sliders must both be full width');
 });
