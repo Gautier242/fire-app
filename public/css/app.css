@@ -378,19 +378,25 @@ dd.air { color: var(--air); }
   flex: none; white-space: nowrap;
   font-family: var(--mono); font-size: var(--t-sm); letter-spacing: 0.04em;
   padding: var(--s-2) var(--s-3); min-height: 32px; cursor: pointer;
-  /* Flat inside the panel. The panel is the surface now, so a chip only has to
-     say on or off -- a border per chip inside a bordered box is one box too many. */
-  background: none;
-  border: 1px solid transparent; border-radius: var(--r); color: var(--muted);
+  /* Every chip carries its own surface and its own outline, in both states. They
+     sit straight on the map, so a chip with no background and no border is a line
+     of faint text over terrain: the layers a reader had turned OFF became the
+     ones they could no longer find to turn back on. The gaps between chips stay
+     transparent -- the map shows through the bar, just not through the controls. */
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(9px);
+  border: 1px solid var(--line); border-radius: var(--r); color: var(--muted);
 }
-.chip:hover { color: var(--ink); background: var(--raised); }
+.chip:hover { color: var(--ink); border-color: var(--accent); }
+/* On is said by the outline and the full-strength label, not by the presence of a
+   box -- the box is there either way, because both states have to be findable. */
 .chip[aria-pressed="true"] {
-  color: var(--ink); background: var(--raised); border-color: var(--line);
+  color: var(--ink); background: var(--raised); border-color: var(--accent);
 }
-/* Dim the label, never the panel. `opacity` on the whole chip made its background
-   translucent too, so street names read straight through an off layer's name --
-   "Biscarrosse" printed across "Routes vers le feu". */
-.chip[aria-pressed="false"] { color: var(--faint); }
+/* Off is dimmer, never invisible: --faint on this surface was legible inside the
+   old panel and disappeared once the chips sat on the map. The swatch carries the
+   rest of the signal. */
+.chip[aria-pressed="false"] { color: var(--muted); }
 .chip[aria-pressed="false"] .sw { opacity: 0.45; }
 .chip[hidden] { display: none; }
 
@@ -412,9 +418,6 @@ dd.air { color: var(--air); }
   background: var(--surface);
   backdrop-filter: blur(9px);
 }
-/* The toolbar is already a surface; a blurred panel inside a blurred panel just
-   muddies both. Inside it a group is only a set of related buttons. */
-.toolbar .seg { background: none; backdrop-filter: none; }
 .seg button {
   font-family: var(--mono); font-size: var(--t-sm);
   padding: var(--s-2) var(--s-3); min-height: 32px; cursor: pointer;
@@ -670,10 +673,16 @@ dd.air { color: var(--air); }
    reader which satellite layer to choose. */
 /* Inside the toolbar panel now, so it no longer needs its own background to stay
    readable over street names. */
+/* Sits on the map beside the layer picker, so it needs its own surface for the
+   same reason the chips do: as bare text it was printed over place names and
+   could not be read at all. */
 .pick-note {
   display: block; font-size: var(--t-sm); color: var(--muted);
-  max-width: 34ch; padding: 0 var(--s-1);
+  max-width: 34ch; padding: var(--s-1) var(--s-2);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(9px); border-radius: var(--r);
 }
+.pick-note:empty { display: none; }
 /* Scoped to the map, and that is not a tidy-up.
 
    `.legend` unscoped also caught pro.html's <p class="legend">, which is written
@@ -838,4 +847,43 @@ dd.air { color: var(--air); }
 /* The dragged class pins left/top; a panel re-anchored to the bottom must not
    keep both, or it stretches between them. */
 .scrubber.dragged { right: auto; }
+
+/* The layer bar folds to the top, so the map can be looked at without twelve
+   labels over it. Only the fold button survives; everything else in the bar goes,
+   and the bar shrinks to that button rather than holding its width open. The
+   inline right that the rail fold writes has to give way here, hence the
+   important -- it is the one place two positioning rules genuinely compete. */
+.toolbar.folded > *:not(.toolbar-fold) { display: none; }
+.toolbar.folded { right: auto !important; }
+.toolbar-fold {
+  justify-content: center; min-width: 34px;
+  font-size: 15px; font-weight: 700; line-height: 1;
+}
+
+/* The rail folds away so the map can have the whole window. Nothing else moves:
+   see foldRail in local-page.js, which holds every floating panel at the screen
+   position it already had. The way back sits in the strip the rail vacated. */
+.rail-toggle {
+  position: absolute; z-index: 600; top: var(--s-3); left: 0;
+  width: 30px; min-height: 150px; padding: var(--s-3) 0; cursor: pointer;
+  display: none; align-items: center; justify-content: center;
+  writing-mode: vertical-rl;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(9px);
+  border: 1px solid var(--line); border-radius: 0 var(--r) var(--r) 0;
+  color: var(--muted); font-family: var(--mono); font-size: var(--t-sm);
+}
+.rail-toggle:hover { color: var(--ink); border-color: var(--accent); }
+/* One column, not "0 1fr". The rail is display:none when folded, so it leaves the
+   grid entirely and the map became the FIRST child -- landing in the 0-width track
+   and rendering at zero pixels wide. */
+.shell[data-rail="off"] { grid-template-columns: 1fr; }
+.shell[data-rail="off"] .rail { display: none; }
+.shell[data-rail="off"] .rail-toggle { display: inline-flex; }
+@media (max-width: 860px) {
+  /* The rail is the page on a phone; folding it away leaves nothing to read. */
+  #rail-hide, .rail-toggle { display: none; }
+  .shell[data-rail="off"] .rail { display: block; }
+}
 

@@ -90,7 +90,9 @@ export const COPY = {
     // The map's own controls. Declared here and named in the HTML by data-t, so
     // that adding a chip without a translation fails a test rather than shipping.
     filmPrev: 'Images précédentes', filmNext: 'Images suivantes',
-    closePanel: 'Fermer',
+    closePanel: 'Fermer', railHide: 'Masquer le panneau', railShow: 'Afficher le panneau',
+    railShowLabel: 'Vue·Locale »',
+    foldLayers: 'Masquer les calques', showLayers: 'Afficher les calques',
     chipFires: 'Feux détectés',
     chipWater: "Points d'eau — registre",
     chipAircraft: 'Moyens aériens',
@@ -177,7 +179,9 @@ export const COPY = {
     burntArea: (km2, when) => `${km2} km² already burnt`
       + (when ? ` (département survey of ${when}).` : ' (département survey).'),
     filmPrev: 'Earlier images', filmNext: 'Later images',
-    closePanel: 'Close',
+    closePanel: 'Close', railHide: 'Hide the panel', railShow: 'Show the panel',
+    railShowLabel: 'Vue·Locale »',
+    foldLayers: 'Hide the layers', showLayers: 'Show the layers',
     chipFires: 'Fires detected',
     chipWater: 'Water points — register',
     chipAircraft: 'Air support',
@@ -1200,6 +1204,61 @@ async function boot() {
   document.querySelectorAll('.scrubber').forEach(makeDraggable);
   document.querySelectorAll('.scrubber').forEach(makeResizable);
   wireFilmNav();
+
+  // The layer bar folds to the top. Twelve labelled chips over the terrain is a
+  // lot to read past when what you want is the map, and every one of them can be
+  // put back with the button that took them away.
+  const foldLayers = (folded) => {
+    const bar = $('toolbar');
+    bar.classList.toggle('folded', folded);
+    const button = $('toolbar-fold');
+    button.setAttribute('aria-expanded', String(!folded));
+    button.textContent = folded ? '+' : '−';
+    button.setAttribute('aria-label', folded ? c().showLayers : c().foldLayers);
+    button.dataset.tAria = folded ? 'showLayers' : 'foldLayers';
+  };
+  $('toolbar-fold').onclick = () => foldLayers(!$('toolbar').classList.contains('folded'));
+
+  // Folding the rail widens the map, and everything floating over the map is
+  // positioned against the map's own edges -- so the layer bar and the scrubbers
+  // would slide 380px sideways under a reader who touched none of them. Each
+  // panel is put back at the screen position it already had.
+  //
+  // Only the properties the stylesheet already sets are written, and only
+  // horizontally: the map's top edge and height do not change, so vertical
+  // position needs no help. Width and height are never touched -- writing those
+  // is what nailed the panels shut the last time this existed.
+  const foldRail = (off) => {
+    const map = document.querySelector('.map');
+    const panels = [...document.querySelectorAll('.scrubber, #toolbar, .map .legend')];
+    const held = panels.map((panel) => {
+      const box = panel.getBoundingClientRect();
+      const style = getComputedStyle(panel);
+      return { panel, left: box.left, right: box.right, width: box.width,
+               pinLeft: style.left !== 'auto', pinRight: style.right !== 'auto' };
+    });
+    $('shell').dataset.rail = off ? 'off' : '';
+    const after = map.getBoundingClientRect();
+    for (const item of held) {
+      // A panel that is not on screen has no position worth keeping, and its
+      // empty box would be restored as a real one.
+      if (item.width === 0) continue;
+      if (item.pinLeft) {
+        // Clamped into the map: unfolding narrows it, and a panel opened while
+        // the rail was away can otherwise be pushed off the left edge with no
+        // way to reach it again.
+        const left = Math.min(Math.max(0, item.left - after.left),
+                              Math.max(0, after.width - item.width));
+        item.panel.style.left = `${left}px`;
+      }
+      if (item.pinRight) {
+        item.panel.style.right = `${Math.max(0, after.right - item.right)}px`;
+      }
+    }
+    view.invalidate();
+  };
+  $('rail-hide').onclick = () => foldRail(true);
+  $('rail-show').onclick = () => foldRail(false);
   $('imagery').onchange = () => { fillFilm(); applyImagery(); };
   $('film').onkeydown = filmKeys;
   $('imagery-opacity').oninput = applyOpacity;

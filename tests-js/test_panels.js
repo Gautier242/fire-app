@@ -76,6 +76,47 @@ test('the panel close button is a bold glyph rather than a filled block', () => 
   assert.match(rule[1], /font-weight:\s*[6-9]00/, 'the cross must be bold enough to find');
 });
 
+// The chips sit straight on the map, so a chip with no background and no border
+// is faint text over terrain. The layers a reader had switched OFF became exactly
+// the ones they could no longer find to switch back on -- the failure mode is
+// that the control for a layer disappears when the layer does.
+test('every layer chip is visible whether it is on or off', () => {
+  const base = CSS.match(/^\.chip\s*{([^}]*)}/m);
+  assert.ok(base, '.chip must be declared');
+  assert.doesNotMatch(base[1], /border:\s*1px solid transparent/,
+    'a chip must carry a visible outline in both states');
+  assert.match(base[1], /border:\s*1px solid var\(--line\)/, 'the outline is on the base chip');
+  assert.doesNotMatch(base[1], /background:\s*none/,
+    'a chip needs its own surface to be read over the map');
+  // Off is dimmer, never invisible. --faint on this surface vanished.
+  const off = CSS.match(/\.chip\[aria-pressed="false"\]\s*{([^}]*)}/);
+  assert.ok(off, 'the off state must be declared');
+  assert.doesNotMatch(off[1], /color:\s*var\(--faint\)/, 'off must stay legible');
+});
+
+// The bar folds to the top, leaving only the button that folded it -- otherwise
+// there is nothing left to press to bring the layers back.
+test('the layer bar folds to a single button that can restore it', () => {
+  assert.match(ZONE, /id="toolbar-fold"/, 'the bar needs a fold button');
+  assert.match(CSS, /\.toolbar\.folded\s*>\s*\*:not\(\.toolbar-fold\)\s*{[^}]*display:\s*none/,
+    'folding hides every child except the button that unfolds it');
+  assert.match(CSS, /\.toolbar\.folded\s*{[^}]*right:\s*auto\s*!important/,
+    'folded, the bar shrinks to its button rather than holding its width');
+});
+
+// The rail folds and comes back, and the way back has to exist on screen: a fold
+// with no visible restore is a panel the reader has lost.
+test('the rail folds away and can be brought back', () => {
+  assert.match(ZONE, /id="rail-hide"/, 'the rail needs a fold control');
+  assert.match(ZONE, /id="rail-show"/, 'and a visible way back');
+  assert.match(CSS, /\.shell\[data-rail="off"\]\s*\.rail-toggle\s*{[^}]*display:\s*inline-flex/,
+    'the restore tab shows exactly when the rail is folded');
+  // Grid, not "0 1fr": the rail leaves the grid when folded, so the map became
+  // the first child and rendered in a zero-width track.
+  assert.match(CSS, /\.shell\[data-rail="off"\]\s*{[^}]*grid-template-columns:\s*1fr/,
+    'the map must take the single remaining column');
+});
+
 // The day slider spans its panel. It had no width rule and fell back to the
 // browser default, so it stopped halfway across and looked as though it had more
 // travel left than it did -- on a control that picks which day's heat is drawn.

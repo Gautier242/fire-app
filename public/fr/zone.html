@@ -49,10 +49,13 @@
     /* A sentence, not a control. As a plain .chip it inherited white-space:
        nowrap and rendered as a 350px-wide button lying across the map, looking
        pressable. */
+    /* A sentence, not a control: it keeps the chip's surface so it stays readable
+       over the map, but loses the outline so nobody tries to press it. Stripping
+       the background too left the sentence printed straight onto street names. */
     .chip.hint {
       cursor: default; color: var(--muted);
       white-space: normal; max-width: 34ch; line-height: 1.45;
-      background: none; border-color: transparent;
+      border-color: transparent;
     }
     .imagery-pick { display: flex; align-items: center; gap: 8px; }
     .imagery-pick select { font-size: 0.78rem; padding: 5px 7px; max-width: 15rem; }
@@ -64,6 +67,8 @@
     <aside class="rail" id="rail">
       <div class="rail-head">
         <div class="brand">Vue<span>·</span>Locale</div>
+        <button type="button" class="btn-ghost" id="rail-hide"
+                data-t-aria="railHide" aria-label="Masquer le panneau">&laquo;</button>
         <button class="btn-lang" id="lang">English</button>
       </div>
 
@@ -141,7 +146,18 @@
     <div class="map">
       <div id="map"></div>
 
+      <!-- Only visible once the rail is folded away; it is the way back. -->
+      <button type="button" class="rail-toggle" id="rail-show"
+              data-t="railShowLabel" data-t-aria="railShow"
+              aria-label="Afficher le panneau">Vue·Locale »</button>
+
       <div class="toolbar" id="toolbar">
+        <!-- Folds the bar to the top when the reader wants the map instead. A
+             glyph, so there is nothing in it to translate; its accessible name
+             carries the meaning and is translated. -->
+        <button type="button" class="chip toolbar-fold" id="toolbar-fold"
+                aria-expanded="true" data-t-aria="foldLayers"
+                aria-label="Masquer les calques">&minus;</button>
         <button class="chip" data-layer="fires" aria-pressed="true">
           <i class="sw fire"></i><span data-t="chipFires">Feux détectés</span>
         </button>
