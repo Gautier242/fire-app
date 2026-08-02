@@ -65,8 +65,15 @@ function render() {
 
   // Newest first: somebody opening this wants the latest state, and reading
   // upward into the past is the natural direction for a record.
+  // "gap" means a feed we were reading did not answer. A satellite-only day is not
+  // that: we were not reading anything yet, so it must not borrow the colour that
+  // says an outage happened.
+  const dayClass = (row) => {
+    if (row.kind === 'observed') return 'day observed';
+    return row.recorded ? 'day' : 'day gap';
+  };
   $('days').innerHTML = [...out.rows].reverse().map((row) => `
-    <div class="day${row.recorded ? '' : ' gap'}">
+    <div class="${dayClass(row)}">
       <h2>${esc(row.date)}</h2>
       ${row.events.map((e) => `
         <div class="ev${e.kind === 'evacuation-lifted' ? ' lifted' : ''}">

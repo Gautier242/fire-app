@@ -42,6 +42,17 @@
     /* A day the feed was down is visibly a gap, never a quiet row of numbers. */
     .day.gap h2 { color: var(--faint); }
     .day.gap .state { color: var(--caution); }
+    /* A day we only have satellite for is not a day a feed failed, so it must not
+       borrow the caution colour a gap uses. It is a quieter, thinner row: real
+       dated observation, but only one kind of it. */
+    .day.observed .state { color: var(--muted); }
+    .day.observed h2 { color: var(--muted); }
+    .day.observed h2::after {
+      content: '·  satellite seulement';
+      font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--faint); margin-left: 8px;
+    }
+    html[lang="en"] .day.observed h2::after { content: '·  satellite only'; }
     .empty { padding: 20px; color: var(--muted); }
   </style>
 </head>

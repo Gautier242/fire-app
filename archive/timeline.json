@@ -1,1 +1,116 @@
-{"generated_at":"2026-08-01T18:11:59Z","first":"2026-08-01","last":"2026-08-01","days":[{"date":"2026-08-01","fr":{"generated_at":"2026-08-01T17:47:44Z","fires":119,"closures":53,"danger":96,"evacuations":0,"stale":[]},"ca":{"generated_at":"2026-08-01T17:47:36Z","fires":764,"evacuations":70,"stale":[]},"gironde":{"closures":105,"fire_closures":10,"evacuations":3,"evacuated":["Lacanau","Lège-Cap-Ferret","Le Porge"],"burn_km2":405.2,"surveyed":"2026-07-27"}}]}
+{
+ "generated_at": "2026-08-01T18:11:59Z",
+ "first": "2026-07-23",
+ "last": "2026-08-01",
+ "days": [
+  {
+   "date": "2026-07-23",
+   "fr": null,
+   "ca": null,
+   "gironde": null,
+   "observed": {
+    "detections": 65,
+    "partial": true
+   }
+  },
+  {
+   "date": "2026-07-24",
+   "fr": null,
+   "ca": null,
+   "gironde": null,
+   "observed": {
+    "detections": 1705,
+    "partial": false
+   }
+  },
+  {
+   "date": "2026-07-25",
+   "fr": null,
+   "ca": null,
+   "gironde": null,
+   "observed": {
+    "detections": 602,
+    "partial": false
+   }
+  },
+  {
+   "date": "2026-07-26",
+   "fr": null,
+   "ca": null,
+   "gironde": null,
+   "observed": {
+    "detections": 1253,
+    "partial": false
+   }
+  },
+  {
+   "date": "2026-07-27",
+   "fr": null,
+   "ca": null,
+   "gironde": null,
+   "observed": {
+    "detections": 54,
+    "partial": false
+   }
+  },
+  {
+   "date": "2026-07-28",
+   "fr": null,
+   "ca": null,
+   "gironde": null,
+   "observed": {
+    "detections": 129,
+    "partial": false
+   }
+  },
+  {
+   "date": "2026-07-29",
+   "fr": null,
+   "ca": null,
+   "gironde": null,
+   "observed": {
+    "detections": 118,
+    "partial": false
+   }
+  },
+  {
+   "date": "2026-07-30",
+   "fr": null,
+   "ca": null,
+   "gironde": null,
+   "observed": {
+    "detections": 25,
+    "partial": true
+   }
+  },
+  {
+   "date": "2026-08-01",
+   "fr": {
+    "generated_at": "2026-08-01T17:47:44Z",
+    "fires": 119,
+    "closures": 53,
+    "danger": 96,
+    "evacuations": 0,
+    "stale": []
+   },
+   "ca": {
+    "generated_at": "2026-08-01T17:47:36Z",
+    "fires": 764,
+    "evacuations": 70,
+    "stale": []
+   },
+   "gironde": {
+    "closures": 105,
+    "fire_closures": 10,
+    "evacuations": 3,
+    "evacuated": [
+     "Lacanau",
+     "L\u00e8ge-Cap-Ferret",
+     "Le Porge"
+    ],
+    "burn_km2": 405.2,
+    "surveyed": "2026-07-27"
+   }
+  }
+ ]
+}

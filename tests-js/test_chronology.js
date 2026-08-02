@@ -121,3 +121,77 @@ test('no wording anywhere says anyone is safe', () => {
     assert.doesNotMatch(text, /en sécurité|hors de danger|is safe|all clear/i, text);
   }
 });
+
+// --- days we only have satellite for -----------------------------------------
+
+// The archive began on 1 August. The satellite detections reach further back,
+// because FIRMS timestamps them, so the record has two kinds of day in it and
+// they must not be shown as the same thing.
+const MIXED = {
+  first: '2026-07-23',
+  last: '2026-08-01',
+  days: [
+    { date: '2026-07-23', fr: null, ca: null, gironde: null,
+      observed: { detections: 65, partial: true } },
+    { date: '2026-07-24', fr: null, ca: null, gironde: null,
+      observed: { detections: 1705, partial: false } },
+    { date: '2026-08-01',
+      fr: { generated_at: '2026-08-01T07:21:07Z', fires: 119, closures: 54,
+            danger: 96, evacuations: 0, stale: [] },
+      ca: { generated_at: '2026-08-01T07:21:02Z', fires: 755, evacuations: 70, stale: [] },
+      gironde: { closures: 119, fire_closures: 16, evacuations: 8,
+                 evacuated: ['Lacanau'], burn_km2: 405.2, surveyed: '2026-07-27' } },
+  ],
+};
+
+test('a satellite-only day is not reported as a feed that failed', () => {
+  const out = describeChronology(MIXED, { lang: 'fr' });
+  const row = out.rows.find((r) => r.date === '2026-07-23');
+
+  assert.equal(row.kind, 'observed');
+  // The gap sentence blames the departement's feed for being down. On these days
+  // we were not reading it at all, which is a different fact about a different
+  // thing, and saying the wrong one invents an outage.
+  for (const line of row.state) {
+    assert.ok(!/indisponible/.test(line), `must not claim an outage: ${line}`);
+  }
+  assert.ok(row.state.some((s) => /65/.test(s)), 'the count is the whole content');
+});
+
+test('a partial day says so, so a low count is not read as a quiet one', () => {
+  const out = describeChronology(MIXED, { lang: 'fr' });
+  const partial = out.rows.find((r) => r.date === '2026-07-23');
+  const whole = out.rows.find((r) => r.date === '2026-07-24');
+
+  assert.equal(partial.partial, true);
+  assert.equal(whole.partial, false);
+  assert.ok(partial.state.some((s) => /partielle/i.test(s)));
+});
+
+test('a recorded day still reads as a recorded day', () => {
+  const out = describeChronology(MIXED, { lang: 'fr' });
+  const row = out.rows.find((r) => r.date === '2026-08-01');
+
+  assert.equal(row.kind, 'recorded');
+  assert.ok(row.state.some((s) => /Lacanau/.test(s)));
+});
+
+// The two starts are different dates and mean different things. Collapsing them
+// into one "the record begins on" sentence would date the archive to a day it
+// was not keeping anything.
+test('the limits separate when we started recording from how far the satellite reaches', () => {
+  const out = describeChronology(MIXED, { lang: 'fr' });
+
+  assert.ok(out.limits.includes('2026-08-01'), 'the record begins when it begins');
+  assert.ok(out.observedFrom === '2026-07-23');
+  assert.ok(/sept jours|FIRMS/.test(out.limits),
+    'and why nothing exists before that: the feed keeps seven days');
+});
+
+test('English says the same things', () => {
+  const out = describeChronology(MIXED, { lang: 'en' });
+  const row = out.rows.find((r) => r.date === '2026-07-23');
+
+  assert.equal(row.kind, 'observed');
+  assert.ok(row.state.some((s) => /partial/i.test(s)));
+});

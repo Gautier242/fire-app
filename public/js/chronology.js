@@ -23,10 +23,12 @@ const COPY = {
     limitsEmpty: "Aucune journée enregistrée pour l'instant. L'archive commence à "
       + "la première exécution : les sources ne publient que l'état courant, sans "
       + "date, et rien ne permet de reconstituer le passé après coup.",
-    limits: (first) => `L'enregistrement commence le ${first}. Ce n'est pas la date `
-      + `de départ du feu : c'est le jour où nous avons commencé à noter ce qui `
-      + `était publié. Avant le ${first}, nous n'avons aucun relevé — les flux ne `
-      + `datent pas leurs entrées.`,
+    limits: (first) => `Cette page ne commence pas au départ du feu. L'enregistrement `
+      + `des flux commence le ${first} : c'est le jour où nous avons commencé à noter ce `
+      + `qui était publié. Les jours antérieurs affichés ici ne tiennent qu'aux détections `
+      + `satellite, parce que FIRMS date les siennes alors que les autres flux ne datent `
+      + `rien. Son flux ne conserve que sept jours : avant le premier jour affiché, il `
+      + `n'existe plus aucune donnée, pas même une détection.`,
     gap: "Flux du Département indisponible ce jour-là. Aucun événement ne peut en "
       + "être déduit : ce n'est pas l'absence de fermetures.",
     evacAdded: (c) => `Évacuation étendue : ${c.join(', ')}.`,
@@ -40,15 +42,24 @@ const COPY = {
     evacNow: (c) => `Communes évacuées ce jour-là : ${c.join(', ')}.`,
     evacNone: 'Aucune commune évacuée dans la liste du Département ce jour-là.',
     burnNow: (km2, when) => `${km2} km² brûlés, relevé du ${when}.`,
+    observedDetections: (n) => `${n} détections de chaleur par satellite dans un rayon `
+      + `de 50 km autour de Bordeaux. C'est ce que les satellites ont vu, pas un périmètre.`,
+    observedOnly: "Nous n'enregistrions pas encore ce jour-là : aucun relevé des flux du "
+      + "Département, ni des routes, ni des évacuations. La détection satellite est le seul "
+      + "élément daté qui subsiste.",
+    observedPartial: "Journée partielle : la fenêtre d'observation ne couvre pas les "
+      + "24 heures, donc le total est plus bas pour une raison qui ne concerne pas le feu.",
   },
   en: {
     limitsEmpty: 'No days recorded yet. The archive starts at its first run: the '
       + 'sources publish only current state, undated, and nothing lets us '
       + 'reconstruct the past after the fact.',
-    limits: (first) => `The record begins on ${first}. That is not when the fire `
-      + `started: it is the day we began writing down what was being published. `
-      + `Before ${first} we hold no reading at all — the feeds do not date their `
-      + `entries.`,
+    limits: (first) => `This page does not begin when the fire did. The feed record `
+      + `begins on ${first}: the day we began writing down what was being published, `
+      + `not when the fire started. The earlier days `
+      + `shown here rest on satellite detections alone, because FIRMS dates its own `
+      + `while the other feeds date nothing. FIRMS keeps seven days: before the first `
+      + `day shown, no data survives at all, not even a detection.`,
     gap: 'The département feed was unavailable that day. No event can be inferred '
       + 'from it: that is not the absence of closures.',
     evacAdded: (c) => `Evacuation extended: ${c.join(', ')}.`,
@@ -62,6 +73,12 @@ const COPY = {
     evacNow: (c) => `Communes evacuated that day: ${c.join(', ')}.`,
     evacNone: 'No commune on the département evacuation list that day.',
     burnNow: (km2, when) => `${km2} km² burnt, survey of ${when}.`,
+    observedDetections: (n) => `${n} satellite heat detections within 50 km of Bordeaux. `
+      + `That is what the satellites saw, not a perimeter.`,
+    observedOnly: 'We were not recording yet that day: no reading of the département feeds, '
+      + 'the roads or the evacuations. The satellite detection is the only dated thing left.',
+    observedPartial: 'Partial day: the observation window does not cover all 24 hours, so the '
+      + 'total is lower for a reason that has nothing to do with the fire.',
   },
 };
 
@@ -124,9 +141,26 @@ export function describeChronology(payload, { lang = 'fr' } = {}) {
     return { first: null, last: null, days: 0, rows: [], limits: c.limitsEmpty };
   }
 
+  // Where the archive itself starts, as opposed to where the satellite reaches.
+  // The two are different dates meaning different things: one is the day we began
+  // writing down what was served, the other is as far back as FIRMS still carried
+  // timestamps when we first looked. Collapsing them would date the archive to a
+  // day it was keeping nothing.
+  const recordedDays = days.filter((d) => d.fr || d.gironde);
+  const firstRecorded = recordedDays.length ? recordedDays[0].date : null;
+
   const rows = days.map((day, i) => {
     const events = i === 0 ? [] : eventsBetween(days[i - 1], day, lang);
     const state = [];
+    // A day we only have satellite for is not a day a feed failed. Saying the gap
+    // sentence here would invent an outage of something we were not reading.
+    if (day.observed && !day.fr && !day.gironde) {
+      state.push(c.observedDetections(day.observed.detections));
+      if (day.observed.partial) state.push(c.observedPartial);
+      state.push(c.observedOnly);
+      return { date: day.date, kind: 'observed', events: [], state,
+               partial: Boolean(day.observed.partial), recorded: false };
+    }
     if (day.gironde) {
       state.push(c.closures(day.gironde.closures, day.gironde.fire_closures));
       // Named, every day, not only on the day one changes. A reader opening
@@ -141,14 +175,17 @@ export function describeChronology(payload, { lang = 'fr' } = {}) {
       state.push(c.gap);
     }
     if (day.fr) state.push(c.firesFr(day.fr.fires));
-    return { date: day.date, events, state, recorded: Boolean(day.gironde) };
+    return { date: day.date, kind: 'recorded', events, state,
+             partial: false, recorded: Boolean(day.gironde) };
   });
 
+  const observedDays = days.filter((d) => d.observed);
   return {
     first: days[0].date,
     last: days[days.length - 1].date,
     days: days.length,
     rows,
-    limits: c.limits(days[0].date),
+    observedFrom: observedDays.length ? observedDays[0].date : null,
+    limits: firstRecorded ? c.limits(firstRecorded) : c.limitsEmpty,
   };
 }

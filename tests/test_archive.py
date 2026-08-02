@@ -149,3 +149,86 @@ def test_a_missing_archive_is_not_an_error_on_the_first_ever_build(tmp_path):
     out.mkdir()
 
     assert publish_timeline(out, source=tmp_path / "nope.json") is None
+
+
+# --- satellite observations, which are the one thing that IS dated ------------
+
+OBSERVED_HISTORY = {
+    # Newest detection observed at 13:00 on the 30th; index 167 is that hour, so
+    # the window opens at 14:00 on the 23rd. Both end days are therefore partial.
+    "generated_at": "2026-07-30T13:00:00Z",
+    "hours": 168,
+    "points": [
+        [-0.6, 44.8, 167, 2, False],   # 30 Jul 13:00
+        [-0.6, 44.8, 160, 1, False],   # 30 Jul 06:00
+        [-0.6, 44.8, 100, 2, False],   # 27 Jul 18:00
+        [-8.0, 44.8, 100, 0, False],   # same hour, far outside the zone
+        [-0.6, 44.8, 0, 1, False],     # 23 Jul 14:00, the partial first day
+    ],
+}
+
+
+def test_detections_are_counted_into_the_days_they_were_observed_on():
+    """FIRMS timestamps its detections, so unlike every other feed here a day's
+    count is a dated observation rather than a reconstruction."""
+    from build.archive import observed_days
+
+    days = {d["date"]: d for d in observed_days(OBSERVED_HISTORY)}
+
+    assert days["2026-07-30"]["detections"] == 2
+    assert days["2026-07-27"]["detections"] == 2
+    assert days["2026-07-23"]["detections"] == 1
+
+
+def test_a_partial_day_says_so_rather_than_reading_as_a_quiet_one():
+    """The window opens mid-afternoon on its first day and closes mid-afternoon
+    on its last. A low count on either is our window, not the fire."""
+    from build.archive import observed_days
+
+    days = {d["date"]: d for d in observed_days(OBSERVED_HISTORY)}
+
+    assert days["2026-07-23"]["partial"] is True
+    assert days["2026-07-30"]["partial"] is True
+    assert days["2026-07-27"]["partial"] is False
+
+
+def test_detections_can_be_counted_inside_one_zone_as_well_as_the_country():
+    """The Gironde is half of France's detections right now, so a national count
+    alone would not show this fire's own arc."""
+    from build.archive import observed_days
+
+    days = {d["date"]: d for d in observed_days(
+        OBSERVED_HISTORY, within=(44.8378, -0.5792, 50.0))}
+
+    # The point at lon -8.0 is roughly 580 km west, in the Atlantic.
+    assert days["2026-07-27"]["detections"] == 1
+
+
+def test_an_observation_never_overwrites_a_day_the_archive_recorded():
+    """A recorded day is what we served that day. An observation is derived
+    afterwards from satellite timestamps. The first outranks the second, always,
+    or the archive stops being a record of what readers were actually shown."""
+    from build.archive import merge_observed
+
+    recorded = merge_timeline([], digest("2026-07-30", fr=FR, gironde=GIRONDE, ca=CA))
+    before = json.dumps(recorded[0], sort_keys=True)
+
+    out = merge_observed(recorded, [{"date": "2026-07-30", "detections": 999,
+                                     "partial": False}])
+
+    assert json.dumps(out[0], sort_keys=True) == before
+
+
+def test_an_observation_fills_a_day_the_archive_never_recorded():
+    """Adding a day that was never written is not rewriting history: it is the
+    only reading that will ever exist for it, and a gap would read as calm."""
+    from build.archive import merge_observed
+
+    out = merge_observed(
+        merge_timeline([], digest("2026-08-01", fr=FR, gironde=GIRONDE, ca=CA)),
+        [{"date": "2026-07-24", "detections": 2933, "partial": False}])
+
+    assert [d["date"] for d in out] == ["2026-07-24", "2026-08-01"]
+    assert out[0]["observed"]["detections"] == 2933
+    # It carries no reading of the départemental feeds, because there is none.
+    assert out[0].get("gironde") is None
