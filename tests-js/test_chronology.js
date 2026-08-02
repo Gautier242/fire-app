@@ -195,3 +195,30 @@ test('English says the same things', () => {
   assert.equal(row.kind, 'observed');
   assert.ok(row.state.some((s) => /partial/i.test(s)));
 });
+
+// The page is about one fire. France's total moves with this fire while hiding
+// it -- the Gironde is roughly half the country's detections right now -- so a
+// national figure here would be both redundant and misleading.
+test('the record reports the zone, never the country', () => {
+  for (const lang of ['fr', 'en']) {
+    const out = describeChronology(MIXED, { lang });
+    const text = out.rows.flatMap((r) => r.state).join(' ');
+    assert.ok(!/France|across France|en France/.test(text),
+      `no national count belongs on this page: ${text}`);
+  }
+});
+
+// A feed that does not carry fire counts must not be read as counting none. The
+// archived zone payload is the roads-and-evacuations one; it has no fires key.
+test('a day whose feed never counted fires does not report zero fires', () => {
+  const noCount = { days: [{ date: '2026-08-01', fr: null, ca: null,
+    gironde: { closures: 105, fire_closures: 10, evacuations: 3,
+               evacuated: ['Lacanau'], burn_km2: 405.2, surveyed: '2026-07-27',
+               fires: null } }] };
+
+  const row = describeChronology(noCount, { lang: 'fr' }).rows[0];
+
+  assert.ok(row.state.some((s) => /pas zéro|non relevé/i.test(s)),
+    'absence has to be said, not shown as a zero');
+  assert.ok(!row.state.some((s) => /^0 foyer/.test(s)));
+});

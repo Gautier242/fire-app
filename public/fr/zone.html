@@ -57,11 +57,32 @@
       white-space: normal; max-width: 34ch; line-height: 1.45;
       border-color: transparent;
     }
+    /* Loud on purpose, and above the fold in the literal sense: it is the first
+       thing on the page and nothing collapses it. */
+    .archived-banner {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
+      padding: 10px 16px;
+      background: var(--caution); color: var(--ground);
+      font-family: var(--mono); font-size: 0.74rem; line-height: 1.45;
+    }
+    .archived-banner[hidden] { display: none; }
+    .archived-banner b { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .archived-banner a { color: var(--ground); font-weight: 700; }
     .imagery-pick { display: flex; align-items: center; gap: 8px; }
     .imagery-pick select { font-size: 0.78rem; padding: 5px 7px; max-width: 15rem; }
   </style>
 </head>
 <body>
+  <!-- The saved view says so before anything else, and cannot be folded away. A
+       frozen page mistaken for the current situation is the one failure this
+       feature can produce, and it produces it in the direction that gets somebody
+       hurt: a fire that is out looks like a fire that is burning. -->
+  <div class="archived-banner" id="archived-banner" hidden>
+    <b data-t="savedTitle">Page archivée</b>
+    <span data-t="savedBody">Quinzaine figée du 23 juillet 2026. Ce n'est pas la
+      situation actuelle : ces données ne sont plus mises à jour.</span>
+    <a href="zone.html?zone=gironde" data-t="savedLive">Voir la situation en cours</a>
+  </div>
   <div class="shell" id="shell" data-mode="simple">
 
     <aside class="rail" id="rail">

@@ -48,6 +48,10 @@ let hydrants = null;
 // What was showing before the map was cleared, so restoring gives a reader their own
 // layers back rather than a default they never chose.
 let restore = [];
+// The saved view. `?save=1` reads a fortnight frozen at the fire rather than the
+// rolling seven days, so the record survives the fire going out. Every other page
+// stays live: if nothing is burning, the live Gironde and France pages say so.
+let saved = false;
 
 function load(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -90,6 +94,10 @@ export const COPY = {
     // The map's own controls. Declared here and named in the HTML by data-t, so
     // that adding a chip without a translation fails a test rather than shipping.
     filmPrev: 'Images précédentes', filmNext: 'Images suivantes',
+    savedTitle: 'Page archivée',
+    savedBody: "Quinzaine figée du 23 juillet 2026. Ce n'est pas la situation actuelle : "
+      + 'ces données ne sont plus mises à jour.',
+    savedLive: 'Voir la situation en cours',
     closePanel: 'Fermer', railHide: 'Masquer le panneau', railShow: 'Afficher le panneau',
     railShowLabel: 'Vue·Locale »',
     foldLayers: 'Masquer les calques', showLayers: 'Afficher les calques',
@@ -107,6 +115,7 @@ export const COPY = {
     ariaBasemap: 'Fond de carte',
     ariaFilm: "Choisir la date de l'image",
     trailChip: 'Chaleur sur 7 jours',
+    trailChipSaved: 'Chaleur, quinzaine figée',
     trailUnavailable: 'Historique 7 jours indisponible.',
     // L'eau, dite au public. Aucun registre SDIS ne publie pour la Gironde : ce
     // qui s'affiche ici est du bénévolat cartographique, et doit le dire.
@@ -121,7 +130,7 @@ export const COPY = {
     },
     waterCrowdOnly: "Aucun registre SDIS ne publie pour ce département. Les points affichés viennent d'OpenStreetMap : ce n'est pas un relevé, et l'absence de point n'est pas l'absence d'eau.",
     waterUnavailable: "Points d'eau indisponibles : nous n'avons pas pu interroger la base. Ce n'est pas l'absence d'eau.",
-    dayLabel: 'Jour', dayAll: '7 jours',
+    dayLabel: 'Jour', dayAll: (n) => `${n} jour(s)`,
     dayNote: 'Chaleur détectée par satellite. Ce n\'est pas un périmètre : les nuages masquent la détection.',
     legendTitle: 'Légende',
     legend: {
@@ -178,6 +187,10 @@ export const COPY = {
     burntArea: (km2, when) => `${km2} km² already burnt`
       + (when ? ` (département survey of ${when}).` : ' (département survey).'),
     filmPrev: 'Earlier images', filmNext: 'Later images',
+    savedTitle: 'Archived page',
+    savedBody: 'A fortnight frozen from 23 July 2026. This is not the current '
+      + 'situation: these figures are no longer updated.',
+    savedLive: 'See the current situation',
     closePanel: 'Close', railHide: 'Hide the panel', railShow: 'Show the panel',
     railShowLabel: 'Vue·Locale »',
     foldLayers: 'Hide the layers', showLayers: 'Show the layers',
@@ -194,6 +207,7 @@ export const COPY = {
     ariaBasemap: 'Base map',
     ariaFilm: 'Choose the image date',
     trailChip: 'Heat over 7 days',
+    trailChipSaved: 'Heat, frozen fortnight',
     trailUnavailable: 'The 7-day history is unavailable.',
     waterMap: {
       waterPoint: 'Water point',
@@ -206,7 +220,7 @@ export const COPY = {
     },
     waterCrowdOnly: 'No SDIS register publishes for this département. The points shown come from OpenStreetMap: that is not a survey, and the absence of a point is not the absence of water.',
     waterUnavailable: 'Water points unavailable: we could not query the database. That is not the absence of water.',
-    dayLabel: 'Day', dayAll: '7 days',
+    dayLabel: 'Day', dayAll: (n) => `${n} day(s)`,
     dayNote: 'Heat detected by satellite. Not a perimeter: cloud blocks detection.',
     legendTitle: 'Legend',
     legend: {
@@ -566,9 +580,12 @@ function applyTrail() {
 
   let shown;
   if (index >= days.length) {
-    // The far right of the slider is the whole week.
+    // The far right of the slider is every day the payload holds -- seven on the
+    // live trail, up to a fortnight on a pinned one. Counted rather than named,
+    // because "7 jours" printed over eight days of a frozen fortnight is a claim
+    // about the record that is simply false.
     shown = pointsForPass(trail, passes, passes.length - 1, passes.length);
-    $('day-date').textContent = c().dayAll;
+    $('day-date').textContent = c().dayAll(days.length);
   } else {
     const [, hours] = days[index];
     const newest = hours[hours.length - 1];
@@ -591,7 +608,14 @@ async function showTrail(on) {
     $('day-scrubber').hidden = true;
     return;
   }
-  if (trail === null) trail = await loadJSON('data/history.json').catch(() => false);
+  // The frozen fortnight, or the rolling week. Never a silent fallback between
+  // them: if the saved trail cannot be fetched, the saved page must say the
+  // record is unavailable rather than quietly show this week's fire instead,
+  // which is a different fire on the same map.
+  if (trail === null) {
+    trail = await loadJSON(saved ? 'data/zones/gironde-trail.json' : 'data/history.json')
+      .catch(() => false);
+  }
   if (!trail || !trail.points || !trail.points.length) {
     // A failed fetch must not leave an empty layer looking like an empty week.
     chip.setAttribute('aria-pressed', 'false');
@@ -1066,6 +1090,13 @@ function applyLanguage() {
   });
   // A French accessible name under an English label is worse than either: the
   // reader who depends on it is the one who cannot see the label.
+  // The saved view's trail is a pinned fortnight, not the rolling week, and the
+  // chip is the label a reader reads before opening it. Applied after the generic
+  // data-t pass, which would otherwise put the live wording back on switch.
+  if (saved) {
+    const chip = $('chip-trail');
+    if (chip) chip.querySelector('span').textContent = c().trailChipSaved;
+  }
   document.querySelectorAll('[data-t-aria]').forEach((el) => {
     el.setAttribute('aria-label', c()[el.dataset.tAria]);
   });
@@ -1118,6 +1149,8 @@ async function selectZone(id) {
 
 async function boot() {
   const params = new URLSearchParams(location.search);
+  saved = params.get('save') === '1';
+  if (saved) $('archived-banner').hidden = false;
   const lat = Number(params.get('lat'));
   const lon = Number(params.get('lon'));
   if (Number.isFinite(lat) && Number.isFinite(lon) && params.get('lat')) {

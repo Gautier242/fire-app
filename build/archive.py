@@ -79,6 +79,18 @@ def digest(date, fr=None, gironde=None, ca=None):
         burn = gironde.get("burn_area")
         burn = burn if isinstance(burn, dict) else {}
         day["gironde"] = {
+            # The zone's own fire count, when the payload carries one. The
+            # national figure cannot stand in for it: the Gironde is roughly half
+            # of France's detections at the moment, so the national number moves
+            # with this fire and hides it in the same breath.
+            #
+            # None, never 0, when the key is absent. The payload archived here is
+            # the département's crisis feed -- closures, detours, evacuations,
+            # perimeter -- and it has no fires key at all. Counting it as zero
+            # would publish "no fire in the Gironde" for a day the fire was
+            # burning, from a feed that was never asked about fires.
+            "fires": (len(gironde["fires"])
+                      if isinstance(gironde.get("fires"), list) else None),
             "closures": _count(gironde, "closures"),
             "fire_closures": sum(1 for c in gironde.get("closures") or []
                                  if c.get("fire_related")),
@@ -177,3 +189,57 @@ def merge_observed(existing, days):
                            "partial": day["partial"]}}
              for day in days or [] if day["date"] not in recorded]
     return sorted(list(existing or []) + added, key=lambda d: d["date"])
+
+
+# 14 x 24, matching firms_history.WINDOW_HOURS. Restated rather than imported so
+# this module stays readable on its own; the test below pins them together.
+WINDOW_HOURS = 14 * 24
+
+
+def pin_window(rolling, window_start, within=None):
+    """Re-index a rolling trail onto a fixed fortnight of its own.
+
+    The rolling payload counts hours back from its newest detection, so every
+    label moves each time it is rebuilt: read six months after the fire, hour 0
+    would be six months late. A pinned window carries its own origin, which is
+    what `history.js` hourToDate() looks for first.
+
+    Anything outside the window is dropped rather than clamped. Clamping would
+    file a detection from after the window under its last hour and invent heat on
+    a day nobody observed any -- the same reason firms_history.normalize() drops.
+
+    `within` is (lat, lon, km): this record belongs to one fire, and a national
+    trail pinned to one fire's fortnight would claim the whole country stopped
+    burning when this one did.
+
+    Coordinates and bands are carried through untouched. Re-indexing moves the
+    frame, never the fire.
+    """
+    from datetime import datetime, timedelta
+
+    stamp = (rolling or {}).get("generated_at")
+    if not stamp:
+        return None
+    newest = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")
+    origin = datetime.strptime(window_start, "%Y-%m-%dT%H:%M:%SZ")
+    origin = origin.replace(minute=0, second=0, microsecond=0)
+    last_index = (rolling.get("hours") or 0) - 1
+
+    points = []
+    for point in rolling.get("points") or []:
+        lon, lat, hour = point[0], point[1], point[2]
+        if within and _km_between(lat, lon, within[0], within[1]) > within[2]:
+            continue
+        when = newest - timedelta(hours=last_index - hour)
+        index = int((when - origin).total_seconds() // 3600)
+        if index < 0 or index >= WINDOW_HOURS:
+            continue
+        points.append([lon, lat, index, point[3], point[4] if len(point) > 4 else False])
+
+    return {
+        "generated_at": stamp,
+        "hours": WINDOW_HOURS,
+        "window_start": origin.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "points": points,
+        "wind": rolling.get("wind") or [],
+    }

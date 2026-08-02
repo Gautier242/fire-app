@@ -38,7 +38,9 @@ const COPY = {
       + `relevé du ${when}.`,
     closures: (n, fire) => `${n} routes coupées par le Département, dont ${fire} `
       + `pour cause d'incendie.`,
-    firesFr: (n) => `${n} foyers détectés en France par satellite.`,
+    firesZone: (n) => `${n} foyer(s) détecté(s) dans la zone.`,
+    firesUnknown: "Nombre de foyers non relevé ce jour-là : le flux archivé est celui "
+      + "des routes et des évacuations, qui ne compte pas les foyers. Ce n'est pas zéro foyer.",
     evacNow: (c) => `Communes évacuées ce jour-là : ${c.join(', ')}.`,
     evacNone: 'Aucune commune évacuée dans la liste du Département ce jour-là.',
     burnNow: (km2, when) => `${km2} km² brûlés, relevé du ${when}.`,
@@ -69,7 +71,9 @@ const COPY = {
       + `survey of ${when}.`,
     closures: (n, fire) => `${n} roads closed by the département, ${fire} of them `
       + `because of the fire.`,
-    firesFr: (n) => `${n} fire clusters detected across France by satellite.`,
+    firesZone: (n) => `${n} fire(s) detected in the zone.`,
+    firesUnknown: 'No fire count recorded that day: the archived feed is the roads and '
+      + 'evacuations one, which does not count fires. That is not zero fires.',
     evacNow: (c) => `Communes evacuated that day: ${c.join(', ')}.`,
     evacNone: 'No commune on the département evacuation list that day.',
     burnNow: (km2, when) => `${km2} km² burnt, survey of ${when}.`,
@@ -174,7 +178,13 @@ export function describeChronology(payload, { lang = 'fr' } = {}) {
     } else {
       state.push(c.gap);
     }
-    if (day.fr) state.push(c.firesFr(day.fr.fires));
+    // The zone's own count, never the national one: this page is about one fire,
+    // and France's total moves with it while hiding it. Absent is said outright
+    // rather than shown as a zero nobody measured.
+    if (day.gironde) {
+      state.push(Number.isFinite(day.gironde.fires)
+        ? c.firesZone(day.gironde.fires) : c.firesUnknown);
+    }
     return { date: day.date, kind: 'recorded', events, state,
              partial: false, recorded: Boolean(day.gironde) };
   });

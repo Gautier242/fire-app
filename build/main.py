@@ -202,6 +202,23 @@ def publish_timeline(out, source=Path("archive/timeline.json")):
     return target
 
 
+def publish_saved_trail(out, source=Path("archive/gironde-trail.json")):
+    """Carry the pinned fortnight into the data the site serves.
+
+    Same reason as publish_timeline: it lives in git because public/ is rebuilt
+    from nothing every half hour, and this is the one trail a rebuild must not be
+    able to roll forward. It is written once, from detections FIRMS no longer
+    serves, and there is no way to make it again.
+    """
+    source = Path(source)
+    if not source.exists():
+        return None
+    target = Path(out) / "zones" / "gironde-trail.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(source.read_text())
+    return target
+
+
 def write_side_file(out, name, fetcher):
     """Write a lazy-loaded layer, or leave the previous one alone.
 
@@ -444,6 +461,14 @@ def apply_france_extras(summary, session, out, previous_flares):
               f"{days['first']} to {days['last']})")
     else:
         print("no archived timeline yet; the chronology page will say so")
+
+    # The frozen fortnight, which the live trail cannot regenerate: FIRMS keeps
+    # seven days and these detections have long since rolled off it.
+    saved = publish_saved_trail(out)
+    if saved:
+        trail = json.loads(saved.read_text())
+        print(f"published {saved} ({len(trail['points'])} detections pinned to "
+              f"{trail['window_start']})")
 
     # Which zones already have somebody's surveyed perimeter. Derived from what was
     # actually fetched rather than from a hardcoded list, so a failed fetch correctly

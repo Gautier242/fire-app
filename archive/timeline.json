@@ -100,6 +100,7 @@
     "stale": []
    },
    "gironde": {
+    "fires": null,
     "closures": 105,
     "fire_closures": 10,
     "evacuations": 3,

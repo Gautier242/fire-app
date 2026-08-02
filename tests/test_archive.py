@@ -24,6 +24,7 @@ FR = {
 }
 GIRONDE = {
     "available": True,
+    "fires": [{"id": "f1"}, {"id": "f2"}, {"id": "f3"}],
     "closures": [{"id": "g1", "fire_related": True}, {"id": "g2", "fire_related": False}],
     "evacuations": [{"name": "Andernos-les-Bains"}, {"name": "Lège-Cap-Ferret"}],
     # The real shape, checked against the live payload: one dict with its own
@@ -232,3 +233,95 @@ def test_an_observation_fills_a_day_the_archive_never_recorded():
     assert out[0]["observed"]["detections"] == 2933
     # It carries no reading of the départemental feeds, because there is none.
     assert out[0].get("gironde") is None
+
+
+def test_the_digest_counts_the_fires_in_the_zone_not_only_the_country():
+    """The timeline is about one fire. A national count cannot show whether this
+    one grew, and the Gironde is roughly half of France's detections right now,
+    so the national figure moves with it and hides it at the same time."""
+    day = digest("2026-08-01", fr=FR, gironde=GIRONDE, ca=CA)
+
+    assert day["gironde"]["fires"] == len(GIRONDE["fires"])
+
+
+def test_a_zone_that_could_not_be_read_reports_no_fire_count_rather_than_zero():
+    """Same rule as every other field here: unavailable is not none."""
+    day = digest("2026-08-01", fr=FR, gironde={"available": False}, ca=CA)
+
+    assert day["gironde"] is None
+
+
+def test_a_payload_without_a_fires_list_reports_none_rather_than_no_fires():
+    """The payload archived for the zone is the département's crisis feed:
+    closures, detours, evacuations, perimeter. It carries no fires key at all.
+    Counting that as zero would publish "no fire in the Gironde" for a day the
+    fire was burning, from a feed nobody asked about fires."""
+    crisis_feed = {"available": True, "closures": [], "evacuations": [],
+                   "burn_area": {"area_km2": 405.2, "surveyed": "2026-07-27"}}
+
+    day = digest("2026-08-01", fr=FR, gironde=crisis_feed, ca=CA)
+
+    assert day["gironde"]["fires"] is None
+    assert day["gironde"]["burn_km2"] == 405.2
+
+
+# --- pinning a rescued trail to its own fortnight -----------------------------
+
+ROLLING = {
+    "generated_at": "2026-07-30T13:00:00Z",
+    "hours": 168,
+    "points": [
+        [-0.6, 44.8, 167, 2, False],   # 30 Jul 13:00
+        [-0.6, 44.8, 0, 1, False],     # 23 Jul 14:00
+        [-8.0, 44.8, 100, 0, False],   # 27 Jul 18:00, far outside the zone
+    ],
+    "wind": [],
+}
+
+
+def test_a_rescued_trail_is_re_indexed_onto_its_own_window():
+    """The rolling payload counts hours back from its newest detection, so its
+    labels move every time it is rebuilt. Pinned, hour 0 is the first hour of the
+    window itself and stays there however long afterwards it is read."""
+    from build.archive import pin_window
+
+    out = pin_window(ROLLING, "2026-07-23T00:00:00Z")
+
+    assert out["window_start"] == "2026-07-23T00:00:00Z"
+    assert out["hours"] == 336
+    # 23 Jul 14:00 is 14 hours after the window opens; 30 Jul 13:00 is 181.
+    hours = sorted(p[2] for p in out["points"])
+    assert hours == [14, 100 + 14, 181]
+
+
+def test_pinning_keeps_a_detection_where_the_satellite_saw_it():
+    """Re-indexing must move the frame, never the fire: a point's coordinates and
+    its band are what the satellite reported and are not ours to adjust."""
+    from build.archive import pin_window
+
+    out = pin_window(ROLLING, "2026-07-23T00:00:00Z")
+    newest = [p for p in out["points"] if p[2] == 181][0]
+
+    assert newest[0] == -0.6 and newest[1] == 44.8
+    assert newest[3] == 2
+
+
+def test_pinning_can_keep_one_zone_and_drop_the_rest_of_the_country():
+    """This record is one fire's. A national trail pinned to one fire's fortnight
+    would claim the whole country stopped burning when this one did."""
+    from build.archive import pin_window
+
+    out = pin_window(ROLLING, "2026-07-23T00:00:00Z", within=(44.8378, -0.5792, 50.0))
+
+    assert len(out["points"]) == 2
+
+
+def test_anything_outside_the_pinned_window_is_dropped_not_clamped():
+    """Clamping would file a detection from after the window under its last hour,
+    which invents heat on a day nobody observed any."""
+    from build.archive import pin_window
+
+    out = pin_window(ROLLING, "2026-07-29T00:00:00Z")
+
+    # Only the 30 Jul point falls inside a window opening on the 29th.
+    assert [p[2] for p in out["points"]] == [37]
