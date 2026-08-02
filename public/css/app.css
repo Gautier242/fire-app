@@ -764,3 +764,59 @@ dd.air { color: var(--air); }
     backdrop-filter: none;
   }
 }
+
+/* ---------------- floating panels: close, move, resize ---------------- */
+
+/* The satellite and trail panels had no way out. Opening one meant living with
+   it: the only route back was un-choosing the layer that spawned it, which is
+   not where anybody looks for a close button. */
+.panel-close {
+  margin-left: auto; flex: none;
+  width: 26px; height: 26px; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; border-radius: var(--r);
+  color: var(--faint); font-family: var(--mono); font-size: var(--t-md);
+  line-height: 1;
+}
+.panel-close:hover { color: var(--ink); border-color: var(--line); background: var(--raised); }
+
+/* Resizable with the browser's own grip rather than a drag implementation:
+   `resize` is one line, it is keyboard- and touch-aware already, and it cannot
+   drift out of sync with the pointer the way hand-rolled handles do.
+   min-* keeps a panel from being shrunk to a sliver that cannot be grabbed back. */
+.scrubber {
+  resize: both; overflow: auto;
+  min-width: 15rem; min-height: 5rem;
+  max-width: calc(100% - var(--s-6)); max-height: 80dvh;
+}
+/* The drag handle: the panel header. Moved by JS because CSS cannot reposition
+   an element from a pointer, but the affordance is stated here. */
+.scrub-head { cursor: move; user-select: none; }
+.scrubber.dragged { bottom: auto; right: auto; }
+
+/* The rail folds away too, so the map can have the whole window on a laptop. */
+.rail-toggle {
+  position: absolute; z-index: 600; top: var(--s-3); left: var(--s-3);
+  width: 28px; height: 34px; padding: 0; cursor: pointer;
+  display: none; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(9px);
+  border: 1px solid var(--line); border-radius: var(--r);
+  color: var(--muted); font-family: var(--mono); font-size: var(--t-md);
+}
+.rail-toggle:hover { color: var(--ink); }
+/* One column, not "0 1fr". The rail is display:none when folded, so it leaves
+   the grid entirely and the map became the FIRST child -- landing in the 0-width
+   track and rendering at zero pixels wide. */
+.shell[data-rail="off"] { grid-template-columns: 1fr; }
+.shell[data-rail="off"] .rail { display: none; }
+.shell[data-rail="off"] .rail-toggle { display: inline-flex; }
+/* With the rail gone the toolbar would sit under the reopen button. */
+.shell[data-rail="off"] .toolbar { left: calc(var(--s-3) + 36px); }
+@media (max-width: 860px) {
+  .shell[data-rail="off"] .toolbar { left: auto; }
+  /* Dragging a panel around a 390px screen is not a gesture anybody wants;
+     on a phone the panels stay in the flow where the layout puts them. */
+  .scrubber { resize: none; min-width: 0; max-width: none; }
+  .scrub-head { cursor: default; }
+}

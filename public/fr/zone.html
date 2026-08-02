@@ -64,6 +64,8 @@
     <aside class="rail" id="rail">
       <div class="rail-head">
         <div class="brand">Vue<span>·</span>Locale</div>
+        <button type="button" class="btn-ghost" id="rail-hide"
+                data-t-aria="railHide" aria-label="Masquer le panneau">&laquo;</button>
         <button class="btn-lang" id="lang">English</button>
       </div>
 
@@ -141,6 +143,10 @@
     <div class="map">
       <div id="map"></div>
 
+      <!-- Only visible once the rail is folded away; it is the way back. -->
+      <button type="button" class="rail-toggle" id="rail-show"
+              data-t-aria="railShow" aria-label="Afficher le panneau">&raquo;</button>
+
       <details class="toolbar" id="toolbar" open>
         <summary data-t="layersToggle">Calques</summary>
         <div class="toolbar-body">
@@ -213,6 +219,8 @@
       <div class="scrubber sheet" id="scrubber" hidden>
         <div class="scrub-head">
           <span id="scrub-label" data-t="scrubLabel">Date de l'image</span><b id="scrub-date"></b>
+          <button type="button" class="panel-close" id="scrub-close"
+                  data-t-aria="closePanel" aria-label="Fermer">&times;</button>
         </div>
         <div class="film" id="film" role="group"
              data-t-aria="ariaFilm" aria-label="Choisir la date de l'image"></div>
@@ -232,6 +240,8 @@
       <div class="scrubber days" id="day-scrubber" hidden>
         <div class="scrub-head">
           <span id="day-label" data-t="dayLabel">Jour</span><b id="day-date"></b>
+          <button type="button" class="panel-close" id="day-close"
+                  data-t-aria="closePanel" aria-label="Fermer">&times;</button>
         </div>
         <input type="range" id="day" min="0" max="6" value="6" step="1">
         <div class="scrub-foot"><span id="day-note"></span></div>

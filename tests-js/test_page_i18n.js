@@ -30,6 +30,14 @@ const PAGES = [
 // visible decision in a diff; leaving a French label in the HTML is not.
 const JS_OWNED = new Set(['opacity-value']);
 
+// A control whose whole label is a glyph -- a multiplication sign for close, a
+// guillemet for fold-away -- has nothing to translate: it reads the same in
+// every language. Its accessible name still does, and the aria-label check
+// below is what holds that. Letters, not symbols, are what needs a key.
+// Entities are stripped first: "&times;" is a glyph but spells letters, so a
+// naive letter test calls the close button untranslated French.
+const symbolOnly = (text) => !/\p{L}/u.test(text.replace(/&[a-z]+;|&#\d+;/gi, ''));
+
 const strip = (html) => html.replace(/<!--[\s\S]*?-->/g, '');
 
 // The map column, which is where the toolbar, the scrubbers and the legend live.
@@ -73,7 +81,7 @@ for (const page of PAGES) {
 
   test(`${page.name}: every control in the map declares a translation key`, () => {
     const untranslatable = controls(mapRegion(html))
-      .filter((el) => !el.key && !JS_OWNED.has(el.id))
+      .filter((el) => !el.key && !JS_OWNED.has(el.id) && !symbolOnly(el.text))
       .map((el) => `<${el.tag}> ${JSON.stringify(el.text)}`);
     assert.deepEqual(untranslatable, [],
       'these controls have no data-t, so the language switch cannot reach them');

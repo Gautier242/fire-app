@@ -90,6 +90,7 @@ export const COPY = {
     // The map's own controls. Declared here and named in the HTML by data-t, so
     // that adding a chip without a translation fails a test rather than shipping.
     layersToggle: 'Calques',
+    closePanel: 'Fermer', railHide: 'Masquer le panneau', railShow: 'Afficher le panneau',
     chipFires: 'Feux détectés',
     chipWater: "Points d'eau — registre",
     chipAircraft: 'Moyens aériens',
@@ -176,6 +177,7 @@ export const COPY = {
     burntArea: (km2, when) => `${km2} km² already burnt`
       + (when ? ` (département survey of ${when}).` : ' (département survey).'),
     layersToggle: 'Layers',
+    closePanel: 'Close', railHide: 'Hide the panel', railShow: 'Show the panel',
     chipFires: 'Fires detected',
     chipWater: 'Water points — register',
     chipAircraft: 'Air support',
@@ -849,6 +851,60 @@ async function showWater(on) {
   renderWater();
 }
 
+/* ---------------- panels ---------------- */
+
+// Closing a panel also puts back the state that opened it. Hiding the box alone
+// would leave the satellite layer drawn over the map with no control left on
+// screen to turn it off, which is worse than not being able to close it at all.
+function closeImagery() {
+  $('imagery').value = '';
+  fillFilm();
+  applyImagery();
+}
+
+function closeTrail() {
+  const chip = $('chip-trail');
+  if (chip) chip.setAttribute('aria-pressed', 'false');
+  showTrail(false);
+  applyClearLabel();
+}
+
+// Drag by the header. Pointer events rather than mouse events so a trackpad, a
+// pen and a touch screen all work from one path, and setPointerCapture keeps the
+// panel following even when the pointer outruns it over the map.
+function makeDraggable(panel) {
+  const head = panel.querySelector('.scrub-head');
+  if (!head) return;
+  head.addEventListener('pointerdown', (event) => {
+    // Not the close button, and not on a phone where the panels sit in flow.
+    if (event.target.closest('button')) return;
+    if (window.matchMedia('(max-width: 860px)').matches) return;
+    const start = panel.getBoundingClientRect();
+    const parent = panel.parentElement.getBoundingClientRect();
+    const dx = event.clientX - start.left;
+    const dy = event.clientY - start.top;
+    head.setPointerCapture(event.pointerId);
+    panel.classList.add('dragged');
+
+    const move = (e) => {
+      // Clamped to the map: a panel dragged off the edge is a panel the reader
+      // cannot get back, and there is no menu anywhere that re-centres it.
+      const x = Math.min(Math.max(0, e.clientX - parent.left - dx),
+                         parent.width - start.width);
+      const y = Math.min(Math.max(0, e.clientY - parent.top - dy),
+                         parent.height - start.height);
+      panel.style.left = `${x}px`;
+      panel.style.top = `${y}px`;
+    };
+    const drop = () => {
+      head.removeEventListener('pointermove', move);
+      head.removeEventListener('pointerup', drop);
+    };
+    head.addEventListener('pointermove', move);
+    head.addEventListener('pointerup', drop);
+  });
+}
+
 /* ---------------- language ---------------- */
 
 function applyLanguage() {
@@ -988,6 +1044,12 @@ async function boot() {
     applyClearLabel();
   };
 
+  $('scrub-close').onclick = closeImagery;
+  $('day-close').onclick = closeTrail;
+  document.querySelectorAll('.scrubber').forEach(makeDraggable);
+  // The rail folds away so the map can have the whole window.
+  $('rail-hide').onclick = () => { $('shell').dataset.rail = 'off'; view.invalidate(); };
+  $('rail-show').onclick = () => { $('shell').dataset.rail = ''; view.invalidate(); };
   $('imagery').onchange = () => { fillFilm(); applyImagery(); };
   $('film').onkeydown = filmKeys;
   $('imagery-opacity').oninput = applyOpacity;
