@@ -88,6 +88,11 @@
 
   --r: 3px;
   --rail-w: 380px;
+  /* Wide enough to open the contact sheet with every date it offers already in
+     view: 14 thumbnails at 54px, 13 gaps at 5px, plus 88px of panel padding and
+     nav arrows. tests-js/test_panels.js fails if this drifts from the date count
+     in local-page.js, because the two are one decision written in two files. */
+  --sheet-w: 909px;
   color-scheme: dark;
 }
 
@@ -490,7 +495,7 @@ dd.air { color: var(--air); }
    horizontally: cloud is the thing a reader is choosing against and it is
    visible at this size. Wider than the other scrubbers because the whole point
    is seeing several days at once. */
-.scrubber.sheet { width: min(430px, calc(100% - 26px)); }
+.scrubber.sheet { width: min(var(--sheet-w), calc(100% - 26px)); }
 .film {
   display: flex; gap: 5px; margin: 9px 0 0;
   overflow-x: auto; overscroll-behavior-x: contain;
@@ -683,7 +688,11 @@ dd.air { color: var(--air); }
 /* The day slider for the seven-day trail, and the legend. Both exist because a
    reader could not otherwise tell a fire burning now from one that burned on
    Tuesday, which is the difference between leaving and staying put. */
-.scrubber.days { bottom: 4.6rem; }
+/* Nothing overflows this one -- measured, its content box and scroll box are both
+   338px -- so it is widened for legibility rather than to uncover anything: the
+   slider is what a reader drags to pick a day, and 340px gave each of fourteen
+   days 24px of travel. */
+.scrubber.days { bottom: 4.6rem; width: min(460px, calc(100% - 26px)); }
 /* Sits directly over the street map, so it needs its own background: unbacked grey
    text on top of place names is unreadable, and this line is the one that tells a
    reader which satellite layer to choose. */
@@ -862,7 +871,7 @@ dd.air { color: var(--air); }
    find it, so folding the panel away read as losing it. It carries the page's
    own name now, set vertically along the edge it will restore. */
 .rail-toggle {
-  position: absolute; z-index: 600; top: var(--s-3); left: 0;
+  position: absolute; z-index: 600; top: 50%; transform: translateY(-50%); left: 0;
   width: 30px; min-height: 150px; padding: var(--s-3) 0; cursor: pointer;
   display: none; align-items: center; justify-content: center; gap: var(--s-2);
   writing-mode: vertical-rl;
@@ -881,10 +890,12 @@ dd.air { color: var(--air); }
 .shell[data-rail="off"] { grid-template-columns: 1fr; }
 .shell[data-rail="off"] .rail { display: none; }
 .shell[data-rail="off"] .rail-toggle { display: inline-flex; }
-/* With the rail gone the toolbar would sit under the reopen button. */
-.shell[data-rail="off"] .toolbar { left: calc(var(--s-3) + 36px); }
+/* The reopen button used to push the toolbar 36px sideways to make room, so
+   folding the rail moved a control the reader was aiming at. The button gives way
+   instead: it sits in the clear band between the toolbar along the top and the
+   legend at the bottom, and its z-index keeps it clickable if a dragged panel is
+   parked over it. Nothing else moves when the rail folds. */
 @media (max-width: 860px) {
-  .shell[data-rail="off"] .toolbar { left: auto; }
   /* Dragging and resizing a panel around a 390px screen is not a gesture
      anybody wants; on a phone the panels stay where the layout puts them. */
   .scrubber, .toolbar, .map .legend {

@@ -883,6 +883,31 @@ const GRIPS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const MIN_W = 224;
 const MIN_H = 64;
 
+// How many days the contact sheet offers, and what one costs on screen. The
+// count is a fortnight because that is the span a reader is asked to judge, and
+// because thirty never fitted: thirty thumbnails need an 1853 px panel and the
+// map on a 1440 px window can give 1036, so the strip opened showing five of
+// them and the remaining twenty-five were reachable only by dragging the corner.
+// Reaching further back than a fortnight is the end-date picker's job, not this
+// strip's.
+//
+// THUMB_W and THUMB_GAP restate `.film button` and `.film`'s gap; SHEET_CHROME
+// is the panel padding, the two nav arrows and their gaps, measured on the real
+// page. They live here so `--sheet-w` in the stylesheet can be checked against
+// them rather than drifting.
+export const FILM_DATES = 14;
+export const THUMB_W = 54;
+export const THUMB_GAP = 5;
+export const SHEET_CHROME = 88;
+
+// Whether a box is worth holding across a rail fold. A hidden panel measures
+// 0x0, and a panel pinned to zero comes back at the stylesheet's minimum instead
+// of its default -- the reader sees a 224px stub where the contact sheet should
+// be. Nothing invisible has geometry worth preserving.
+export function holdsGeometry(box) {
+  return box.width > 0 && box.height > 0;
+}
+
 // The floor a panel may not be resized below, measured from what it is holding
 // rather than picked as a constant. Shrinking past this hid controls: chips and
 // legend rows do not wrap inside themselves, so a panel narrower than its widest
@@ -1119,7 +1144,7 @@ async function boot() {
   ['fires', 'spread', 'closures official', 'detail', 'evacuated', 'burnt', 'aircraft']
     .forEach((n) => view.toggle(n, true));
 
-  dates = availableDates(todayUTC(), 30);
+  dates = availableDates(todayUTC(), FILM_DATES);
 
   document.querySelectorAll('#basemap button').forEach((b) => {
     b.onclick = () => {
@@ -1194,11 +1219,19 @@ async function boot() {
     const panels = [...document.querySelectorAll('.scrubber, #toolbar, .map .legend')];
     const origin = () => document.querySelector('.map').getBoundingClientRect();
     const before = origin();
-    const held = panels.map((panel) => {
-      const box = panel.getBoundingClientRect();
-      return { panel, left: box.left - before.left, top: box.top - before.top,
-               w: box.width, h: box.height };
-    });
+    // Only what is actually on screen. A hidden panel measures 0x0, and pinning
+    // that wrote `width: 0` onto it: the satellite sheet and the day slider then
+    // opened at the 224x64 floor the stylesheet enforces, showing two thumbnails
+    // of fourteen. Folding the rail once before ever opening a panel was enough
+    // to do it, which is why the panels looked far too small however wide their
+    // default was made. A panel that is not showing has no geometry worth
+    // keeping.
+    const held = panels.filter((panel) => holdsGeometry(panel.getBoundingClientRect()))
+      .map((panel) => {
+        const box = panel.getBoundingClientRect();
+        return { panel, left: box.left - before.left, top: box.top - before.top,
+                 w: box.width, h: box.height };
+      });
     $('shell').dataset.rail = off ? 'off' : '';
     for (const item of held) {
       item.panel.style.width = `${item.w}px`;
@@ -1214,6 +1247,23 @@ async function boot() {
   };
   $('rail-hide').onclick = () => foldRail(true);
   $('rail-show').onclick = () => foldRail(false);
+  // A folded <details> reports the box of its summary alone. foldRail pins every
+  // panel to pixels so the rail toggle cannot resize them underneath the reader,
+  // and pinning one while it was folded nailed it shut: the inline height stayed
+  // in force when it reopened, so the layers list and the legend came back 64px
+  // tall with their contents clipped and no way to get them back.
+  //
+  // The size a panel had while folded says nothing about the size it needs while
+  // open, so opening or closing one drops the pin and lets the browser measure it
+  // again. Only width and height are released -- where the reader dragged the
+  // panel is theirs and is left alone. Neither of these two is resizable, so
+  // there is no hand-set size here to lose.
+  for (const panel of document.querySelectorAll('details.toolbar, details.legend')) {
+    panel.addEventListener('toggle', () => {
+      panel.style.width = '';
+      panel.style.height = '';
+    });
+  }
   $('imagery').onchange = () => { fillFilm(); applyImagery(); };
   $('film').onkeydown = filmKeys;
   $('imagery-opacity').oninput = applyOpacity;
