@@ -92,6 +92,7 @@ export const COPY = {
     layersToggle: 'Calques',
     filmPrev: 'Images précédentes', filmNext: 'Images suivantes',
     closePanel: 'Fermer', railHide: 'Masquer le panneau', railShow: 'Afficher le panneau',
+    railShowLabel: 'Vue·Locale »',
     chipFires: 'Feux détectés',
     chipWater: "Points d'eau — registre",
     chipAircraft: 'Moyens aériens',
@@ -180,6 +181,7 @@ export const COPY = {
     layersToggle: 'Layers',
     filmPrev: 'Earlier images', filmNext: 'Later images',
     closePanel: 'Close', railHide: 'Hide the panel', railShow: 'Show the panel',
+    railShowLabel: 'Vue·Locale »',
     chipFires: 'Fires detected',
     chipWater: 'Water points — register',
     chipAircraft: 'Air support',
@@ -1167,8 +1169,10 @@ async function boot() {
   $('scrub-close').onclick = closeImagery;
   $('day-close').onclick = closeTrail;
   document.querySelectorAll('.scrubber, #toolbar, .map .legend').forEach(makeDraggable);
-  // Layers and legend get the same handles: both hold more than fits.
-  document.querySelectorAll('.scrubber, #toolbar, .map .legend').forEach(makeResizable);
+  // Only the two scrubbers resize. Layers and legend hold a fixed set of
+  // controls that must all stay reachable, so they fold and move but keep the
+  // size the layout gives them.
+  document.querySelectorAll('.scrubber').forEach(makeResizable);
   wireFilmNav();
   // The rail folds away so the map can have the whole window.
   $('rail-hide').onclick = () => { $('shell').dataset.rail = 'off'; view.invalidate(); };

@@ -707,7 +707,10 @@ dd.air { color: var(--air); }
    bar bottom-right, and the scale bar was drawing straight through the legend
    text -- "10 km" printed across "Closed road (other cause)". */
 .map .legend {
-  position: absolute; right: var(--s-3); top: var(--s-3); z-index: 500;
+  /* Bottom-left, opening upwards: the top belongs to the layer bar now, and
+     anchoring by the bottom edge means unfolding grows away from the edge
+     instead of pushing the panel off it. */
+  position: absolute; left: var(--s-3); bottom: var(--s-3); z-index: 500;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(9px);
   border: 1px solid var(--line);
@@ -802,7 +805,9 @@ dd.air { color: var(--air); }
 }
 /* Restated after the shared rule above, which was overriding it and letting the
    layers panel span the whole map. The right-hand side belongs to the legend. */
-.toolbar { min-width: 0; max-width: min(56ch, calc(100% - 38ch)); }
+/* Across the top, nearly the full width: the layer chips are the control a
+   reader uses most and wrapping them into a tall block buried the later ones. */
+.toolbar { min-width: 0; max-width: calc(100% - var(--s-6)); }
 /* Same restatement, same reason: the shared rule above was widening the legend
    from 34ch to the width of the map the moment it was moved. */
 .map .legend { max-width: 34ch; }
@@ -853,10 +858,17 @@ dd.air { color: var(--air); }
 .scrubber.dragged { bottom: auto; right: auto; }
 
 /* The rail folds away too, so the map can have the whole window on a laptop. */
+/* Reopening the rail was a 28px guillemet against the map and people could not
+   find it, so folding the panel away read as losing it. It carries the page's
+   own name now, set vertically along the edge it will restore. */
 .rail-toggle {
-  position: absolute; z-index: 600; top: var(--s-3); left: var(--s-3);
-  width: 28px; height: 34px; padding: 0; cursor: pointer;
-  display: none; align-items: center; justify-content: center;
+  position: absolute; z-index: 600; top: var(--s-3); left: 0;
+  width: 30px; min-height: 150px; padding: var(--s-3) 0; cursor: pointer;
+  display: none; align-items: center; justify-content: center; gap: var(--s-2);
+  writing-mode: vertical-rl;
+  font-family: var(--mono); font-size: var(--t-sm);
+  letter-spacing: 0.14em; text-transform: uppercase;
+  border-radius: 0 var(--r) var(--r) 0;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(9px);
   border: 1px solid var(--line); border-radius: var(--r);
@@ -881,3 +893,19 @@ dd.air { color: var(--air); }
   .grip { display: none; }
   .scrub-head { cursor: default; }
 }
+
+/* Same treatment as the panel close buttons, for the same reason: as a btn-ghost
+   this sat at --muted next to the wordmark and read as decoration. */
+#rail-hide {
+  flex: none; width: 24px; height: 24px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ink); color: var(--surface);
+  border: none; border-radius: 5px;
+  font-family: var(--sans); font-size: 14px; font-weight: 600; line-height: 1;
+}
+#rail-hide:hover { background: var(--accent); color: var(--ground); }
+.rail-head { gap: var(--s-2); }
+/* The wordmark keeps the middle; the fold button sits against it on the left. */
+.rail-head .brand { order: 2; margin-right: auto; }
+.rail-head #rail-hide { order: 1; }
+.rail-head .btn-lang { order: 3; }
