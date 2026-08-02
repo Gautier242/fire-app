@@ -1,10 +1,12 @@
 // How this fire changed, from the only two records that are honestly dated.
 //
-// Almost nothing upstream carries a timestamp. All 116 Gironde closures publish
-// `since: null`, the evacuated communes publish no date, and FIRMS serves a
-// rolling seven-day window that forgets the eighth day. There is therefore no
-// history to recover after the fact: there is only what we wrote down while it
-// was being served, which is what archive/timeline.json holds.
+// Almost nothing upstream carries a timestamp, and this page is built out of the
+// little that does. FIRMS dates every detection. A minority of the Gironde
+// closures -- 8 of 105 -- carry the day they began, and those reach to 22 July,
+// further back than the satellite window. The evacuated communes publish no date
+// at all and the perimeter publishes only its survey date, so for those there is
+// only what we wrote down while it was being served, which is what
+// archive/timeline.json holds.
 //
 // Two rules run through everything here.
 //
@@ -46,6 +48,10 @@ const COPY = {
     burnNow: (km2, when) => `${km2} km² brûlés, relevé du ${when}.`,
     observedDetections: (n) => `${n} détections de chaleur par satellite dans un rayon `
       + `de 50 km autour de Bordeaux. C'est ce que les satellites ont vu, pas un périmètre.`,
+    observedClosed: (roads) => `Fermeture(s) publiée(s) par le Département à partir de `
+      + `ce jour : ${roads.join(', ')}.`,
+    observedNoDetections: "Aucune détection satellite retenue pour ce jour : notre fenêtre "
+      + "d'observation ne remonte pas jusque-là. Ce n'est pas l'absence de feu.",
     observedOnly: "Nous n'enregistrions pas encore ce jour-là : aucun relevé des flux du "
       + "Département, ni des routes, ni des évacuations. La détection satellite est le seul "
       + "élément daté qui subsiste.",
@@ -58,10 +64,10 @@ const COPY = {
       + 'reconstruct the past after the fact.',
     limits: (first) => `This page does not begin when the fire did. The feed record `
       + `begins on ${first}: the day we began writing down what was being published, `
-      + `not when the fire started. The earlier days `
-      + `shown here rest on satellite detections alone, because FIRMS dates its own `
-      + `while the other feeds date nothing. FIRMS keeps seven days: before the first `
-      + `day shown, no data survives at all, not even a detection.`,
+      + `not when the fire started. The earlier days rest on two things only: satellite `
+      + `detections, which FIRMS dates, and the minority of road closures that carry `
+      + `their start day. Everything else — evacuations, perimeter — dates itself `
+      + `nowhere: before ${first} we hold no reading of any of it.`,
     gap: 'The département feed was unavailable that day. No event can be inferred '
       + 'from it: that is not the absence of closures.',
     evacAdded: (c) => `Evacuation extended: ${c.join(', ')}.`,
@@ -79,6 +85,10 @@ const COPY = {
     burnNow: (km2, when) => `${km2} km² burnt, survey of ${when}.`,
     observedDetections: (n) => `${n} satellite heat detections within 50 km of Bordeaux. `
       + `That is what the satellites saw, not a perimeter.`,
+    observedClosed: (roads) => `Closure(s) published by the département as starting `
+      + `that day: ${roads.join(', ')}.`,
+    observedNoDetections: 'No satellite detection held for that day: our observation '
+      + 'window does not reach back that far. That is not the absence of fire.',
     observedOnly: 'We were not recording yet that day: no reading of the département feeds, '
       + 'the roads or the evacuations. The satellite detection is the only dated thing left.',
     observedPartial: 'Partial day: the observation window does not cover all 24 hours, so the '
@@ -159,8 +169,18 @@ export function describeChronology(payload, { lang = 'fr' } = {}) {
     // A day we only have satellite for is not a day a feed failed. Saying the gap
     // sentence here would invent an outage of something we were not reading.
     if (day.observed && !day.fr && !day.gironde) {
-      state.push(c.observedDetections(day.observed.detections));
-      if (day.observed.partial) state.push(c.observedPartial);
+      // Closures date themselves on a minority of rows, and those reach a day
+      // further back than the satellite window does.
+      if (day.observed.closed && day.observed.closed.length) {
+        state.push(c.observedClosed(day.observed.closed));
+      }
+      if (Number.isFinite(day.observed.detections)) {
+        state.push(c.observedDetections(day.observed.detections));
+        if (day.observed.partial) state.push(c.observedPartial);
+      } else {
+        // Never a silent blank: a day before our window is not a quiet day.
+        state.push(c.observedNoDetections);
+      }
       state.push(c.observedOnly);
       return { date: day.date, kind: 'observed', events: [], state,
                partial: Boolean(day.observed.partial), recorded: false };

@@ -1,11 +1,16 @@
 """The record of this fire, kept after the sources stop serving it.
 
-Every feed here publishes current state and nothing else. All 116 Gironde
-closures carry `since: null`, the evacuated communes carry no date, and FIRMS
-serves a rolling seven-day window that forgets the eighth. So there is no
-retrospective timeline to recover: what is not written down as it happens is
+Every feed here publishes current state, with two exceptions that are the only
+reason any of this reaches back at all. FIRMS timestamps each detection. And a
+minority of the Gironde closures -- 8 of the 105 served today -- carry the day
+the closure began, which reaches to 22 July, further than anything else we hold.
+The evacuated communes carry no date at all, the perimeter carries only its own
+survey date, and FIRMS serves a rolling seven-day window that forgets the eighth.
+
+So most of the past is unrecoverable: what is not written down as it happens is
 gone, and the départemental ArcGIS layers will be taken down when the emergency
-they exist for ends.
+they exist for ends. The layers themselves were only published on 26 and 28 July,
+so nothing upstream holds anything earlier either.
 
 Two artefacts, for two different jobs:
 
@@ -170,6 +175,29 @@ def _km_between(lat_a, lon_a, lat_b, lon_b):
     return math.hypot(x, y)
 
 
+def closure_days(gironde):
+    """Road closures grouped by the day they began.
+
+    This module's opening paragraph says the closures publish no dates. That was
+    true of most of them and is still true of most of them -- 97 of the 105 rows
+    served today carry nothing -- but a minority do carry the day the closure
+    started, and those reach back to 22 July, further than any other record here
+    including the satellite window.
+
+    An undated closure is filed under no day at all. Filing it under the day we
+    read the feed would invent a closure event on a date nothing was reported
+    closed, which is the same failure as reading a gap as calm.
+    """
+    days = {}
+    for closure in (gironde or {}).get("closures") or []:
+        since = closure.get("since")
+        if not since:
+            continue
+        days.setdefault(since[:10], []).append(closure.get("road") or closure.get("name"))
+    return [{"date": date, "closed": sorted(n for n in roads if n)}
+            for date, roads in sorted(days.items())]
+
+
 def merge_observed(existing, days):
     """Add satellite observations for days the archive never recorded.
 
@@ -184,10 +212,22 @@ def merge_observed(existing, days):
     suggests nothing was burning before it.
     """
     recorded = {d.get("date") for d in existing or []}
-    added = [{"date": day["date"], "fr": None, "ca": None, "gironde": None,
-              "observed": {"detections": day["detections"],
-                           "partial": day["partial"]}}
-             for day in days or [] if day["date"] not in recorded]
+    # One row per day, whichever kinds of derived reading it has. 22 July carries
+    # closures and no detections -- the satellite window opens on the 23rd -- and
+    # the days after it carry both.
+    merged = {}
+    for day in days or []:
+        if day["date"] in recorded:
+            continue
+        seen = merged.setdefault(day["date"], {"detections": None, "partial": False,
+                                               "closed": []})
+        if day.get("detections") is not None:
+            seen["detections"] = day["detections"]
+            seen["partial"] = bool(day.get("partial"))
+        if day.get("closed"):
+            seen["closed"] = sorted(set(seen["closed"]) | set(day["closed"]))
+    added = [{"date": date, "fr": None, "ca": None, "gironde": None, "observed": seen}
+             for date, seen in merged.items()]
     return sorted(list(existing or []) + added, key=lambda d: d["date"])
 
 

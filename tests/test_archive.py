@@ -325,3 +325,55 @@ def test_anything_outside_the_pinned_window_is_dropped_not_clamped():
 
     # Only the 30 Jul point falls inside a window opening on the 29th.
     assert [p[2] for p in out["points"]] == [37]
+
+
+# --- closures that date themselves --------------------------------------------
+
+DATED_CLOSURES = {
+    "available": True,
+    "closures": [
+        {"road": "D3", "since": "2026-07-22", "fire_related": True},
+        {"road": "D107", "since": "2026-07-22", "fire_related": True},
+        {"road": "D807", "since": "2026-07-23", "fire_related": True},
+        {"road": "D6", "since": "2026-07-25", "fire_related": False},
+        {"road": "D999", "since": None, "fire_related": True},
+    ],
+}
+
+
+def test_closures_that_carry_a_start_date_are_grouped_by_the_day_they_closed():
+    """Most of this feed is undated, but a minority of rows carry the day the
+    closure began -- and those reach back further than anything else we hold."""
+    from build.archive import closure_days
+
+    days = {d["date"]: d for d in closure_days(DATED_CLOSURES)}
+
+    assert sorted(days) == ["2026-07-22", "2026-07-23", "2026-07-25"]
+    assert sorted(days["2026-07-22"]["closed"]) == ["D107", "D3"]
+
+
+def test_an_undated_closure_is_not_filed_under_any_day():
+    """97 of 105 rows carry no date. Filing them under the day we read the feed
+    would invent a closure event on a day nothing was reported closed."""
+    from build.archive import closure_days
+
+    filed = [r for d in closure_days(DATED_CLOSURES) for r in d["closed"]]
+
+    assert "D999" not in filed
+
+
+def test_a_derived_day_can_carry_both_detections_and_closures():
+    """22 July has closures but no detections -- the satellite window opens on the
+    23rd -- and the days after have both. One row per day, either way."""
+    from build.archive import merge_observed
+
+    out = merge_observed([], [
+        {"date": "2026-07-22", "closed": ["D3"]},
+        {"date": "2026-07-23", "detections": 65, "partial": True, "closed": ["D807"]},
+    ])
+
+    assert [d["date"] for d in out] == ["2026-07-22", "2026-07-23"]
+    assert out[0]["observed"]["closed"] == ["D3"]
+    assert out[0]["observed"].get("detections") is None
+    assert out[1]["observed"]["detections"] == 65
+    assert out[1]["observed"]["closed"] == ["D807"]

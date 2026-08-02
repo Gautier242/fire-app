@@ -222,3 +222,32 @@ test('a day whose feed never counted fires does not report zero fires', () => {
     'absence has to be said, not shown as a zero');
   assert.ok(!row.state.some((s) => /^0 foyer/.test(s)));
 });
+
+// The closures are the only feed that reaches further back than the satellite
+// window, on the minority of rows that carry a start date. 22 July has closures
+// and no detections at all.
+const WITH_CLOSURES = { days: [
+  { date: '2026-07-22', fr: null, ca: null, gironde: null,
+    observed: { detections: null, partial: false, closed: ['D107', 'D3'] } },
+  { date: '2026-07-23', fr: null, ca: null, gironde: null,
+    observed: { detections: 65, partial: true, closed: ['D807'] } },
+] };
+
+test('a day with closures and no detections says both, and neither as silence', () => {
+  const rows = describeChronology(WITH_CLOSURES, { lang: 'fr' }).rows;
+  const first = rows.find((r) => r.date === '2026-07-22');
+
+  assert.ok(first.state.some((s) => /D107/.test(s) && /D3/.test(s)), 'names the roads');
+  // A day before our observation window is not a day nothing burned.
+  assert.ok(first.state.some((s) => /pas l'absence de feu/i.test(s)),
+    'absence of detections must be stated, not left blank');
+  assert.ok(!first.state.some((s) => /^0 détection/.test(s)));
+});
+
+test('a day with both carries both', () => {
+  const row = describeChronology(WITH_CLOSURES, { lang: 'fr' }).rows
+    .find((r) => r.date === '2026-07-23');
+
+  assert.ok(row.state.some((s) => /D807/.test(s)));
+  assert.ok(row.state.some((s) => /65/.test(s)));
+});
