@@ -481,7 +481,10 @@ dd.air { color: var(--air); }
   font-variant-numeric: tabular-nums;
 }
 .scrub-foot { text-transform: none; letter-spacing: 0; margin-top: 5px; }
-#scrub { width: 100%; margin: 9px 0 0; accent-color: var(--heat-2); min-height: 24px; }
+/* Both sliders, full width. The day slider had no width rule and fell back to
+   the browser default, so it stopped halfway across its panel and looked as
+   though it had more travel left than it did. */
+#scrub, #day { width: 100%; margin: 9px 0 0; accent-color: var(--heat-2); min-height: 24px; }
 
 /* The contact sheet. Thirty small real tiles, newest first, scrolled
    horizontally: cloud is the thing a reader is choosing against and it is
@@ -797,8 +800,12 @@ dd.air { color: var(--air); }
   min-width: 14rem; min-height: 4rem;
   max-width: calc(100% - var(--s-6)); max-height: 82dvh;
 }
-/* The toolbar sizes to its contents until somebody resizes it. */
-.toolbar { min-width: 0; }
+/* Restated after the shared rule above, which was overriding it and letting the
+   layers panel span the whole map. The right-hand side belongs to the legend. */
+.toolbar { min-width: 0; max-width: min(56ch, calc(100% - 38ch)); }
+/* Same restatement, same reason: the shared rule above was widening the legend
+   from 34ch to the width of the map the moment it was moved. */
+.map .legend { max-width: 34ch; }
 .toolbar-body { overflow: auto; }
 
 /* Eight grab zones, invisible until wanted. 6px is the smallest that a pointer

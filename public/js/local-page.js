@@ -881,6 +881,30 @@ const GRIPS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const MIN_W = 224;
 const MIN_H = 64;
 
+// The floor a panel may not be resized below, measured from what it is holding
+// rather than picked as a constant. Shrinking past this hid controls: chips and
+// legend rows do not wrap inside themselves, so a panel narrower than its widest
+// row clips that row, and a panel shorter than its header plus one row leaves
+// nothing usable on screen.
+function contentMin(panel) {
+  // Leaf controls only. Measuring the rows instead made the floor the width of
+  // the whole unwrapped chip row, so the layers panel could not be narrowed by a
+  // single pixel: its chips wrap, so what must stay visible is the widest one
+  // chip, not all of them side by side.
+  let widest = 0;
+  for (const el of panel.querySelectorAll('button, select, input, li, .chip')) {
+    if (el.classList.contains('grip')) continue;
+    if (el.offsetWidth > widest) widest = el.offsetWidth;
+  }
+  const head = panel.querySelector('.scrub-head, summary');
+  const style = getComputedStyle(panel);
+  const pad = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  return {
+    w: Math.max(MIN_W, widest + pad + 2),
+    h: Math.max(MIN_H, (head ? head.offsetHeight : 0) + 56),
+  };
+}
+
 function makeResizable(panel) {
   for (const dir of GRIPS) {
     const grip = document.createElement('div');
@@ -892,6 +916,7 @@ function makeResizable(panel) {
       event.stopPropagation();
       const box = panel.getBoundingClientRect();
       const parent = panel.parentElement.getBoundingClientRect();
+      const floor = contentMin(panel);
       const x0 = event.clientX;
       const y0 = event.clientY;
       grip.setPointerCapture(event.pointerId);
@@ -907,15 +932,15 @@ function makeResizable(panel) {
       const move = (e) => {
         const dx = e.clientX - x0;
         const dy = e.clientY - y0;
-        if (dir.includes('e')) panel.style.width = `${Math.max(MIN_W, box.width + dx)}px`;
-        if (dir.includes('s')) panel.style.height = `${Math.max(MIN_H, box.height + dy)}px`;
+        if (dir.includes('e')) panel.style.width = `${Math.max(floor.w, box.width + dx)}px`;
+        if (dir.includes('s')) panel.style.height = `${Math.max(floor.h, box.height + dy)}px`;
         if (dir.includes('w')) {
-          const width = Math.max(MIN_W, box.width - dx);
+          const width = Math.max(floor.w, box.width - dx);
           panel.style.width = `${width}px`;
           panel.style.left = `${box.left - parent.left + (box.width - width)}px`;
         }
         if (dir.includes('n')) {
-          const height = Math.max(MIN_H, box.height - dy);
+          const height = Math.max(floor.h, box.height - dy);
           panel.style.height = `${height}px`;
           panel.style.top = `${box.top - parent.top + (box.height - height)}px`;
         }
@@ -956,12 +981,21 @@ function wireFilmNav() {
 // pen and a touch screen all work from one path, and setPointerCapture keeps the
 // panel following even when the pointer outruns it over the map.
 function makeDraggable(panel) {
-  const head = panel.querySelector('.scrub-head');
+  // A summary is also a toggle, so a drag must not count as a click. The move
+  // only starts past a few pixels of travel, and the click that ends it is
+  // swallowed -- otherwise every reposition of the layers panel would also fold
+  // it away.
+  const head = panel.querySelector('.scrub-head, summary');
   if (!head) return;
+  let moved = false;
+  head.addEventListener('click', (event) => {
+    if (moved) { event.preventDefault(); event.stopPropagation(); moved = false; }
+  }, true);
   head.addEventListener('pointerdown', (event) => {
     // Not the close button, and not on a phone where the panels sit in flow.
     if (event.target.closest('button')) return;
     if (window.matchMedia('(max-width: 860px)').matches) return;
+    moved = false;
     const start = panel.getBoundingClientRect();
     const parent = panel.parentElement.getBoundingClientRect();
     const dx = event.clientX - start.left;
@@ -970,6 +1004,9 @@ function makeDraggable(panel) {
     panel.classList.add('dragged');
 
     const move = (e) => {
+      if (Math.abs(e.clientX - event.clientX) > 4
+          || Math.abs(e.clientY - event.clientY) > 4) moved = true;
+      if (!moved) return;
       // Clamped to the map: a panel dragged off the edge is a panel the reader
       // cannot get back, and there is no menu anywhere that re-centres it.
       const x = Math.min(Math.max(0, e.clientX - parent.left - dx),
@@ -1129,7 +1166,7 @@ async function boot() {
 
   $('scrub-close').onclick = closeImagery;
   $('day-close').onclick = closeTrail;
-  document.querySelectorAll('.scrubber').forEach(makeDraggable);
+  document.querySelectorAll('.scrubber, #toolbar, .map .legend').forEach(makeDraggable);
   // Layers and legend get the same handles: both hold more than fits.
   document.querySelectorAll('.scrubber, #toolbar, .map .legend').forEach(makeResizable);
   wireFilmNav();
