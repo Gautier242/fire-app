@@ -102,7 +102,6 @@ export const COPY = {
     chipDetail: 'Bâtiments et rues',
     chipEvacuated: 'Communes évacuées',
     chipBurnt: 'Déjà brûlé',
-    chipEgress: 'Routes vers le feu',
     // IGN's own product name, so it is the same in both languages.
     baseIgn: 'Plan IGN', baseSatellite: 'Satellite', basePlain: 'Sobre',
     ariaBasemap: 'Fond de carte',
@@ -191,7 +190,6 @@ export const COPY = {
     chipDetail: 'Buildings and streets',
     chipEvacuated: 'Evacuated communes',
     chipBurnt: 'Already burnt',
-    chipEgress: 'Roads toward the fire',
     baseIgn: 'Plan IGN', baseSatellite: 'Satellite', basePlain: 'Plain',
     ariaBasemap: 'Base map',
     ariaFilm: 'Choose the image date',
@@ -1128,11 +1126,11 @@ async function boot() {
 
   view = createMap('map', { center: [46.6, 2.5], zoom: 6 });
   view.setBase('plan_ign');
-  // Egress is off by default and opt-in through its chip. Measured downwind of the
-  // Gironde fires it flagged 110 of the 250 roads considered -- 44 per cent -- and a
-  // wall of amber over half the streets on screen tells a reader nothing while
-  // looking authoritative. The count and the caveat are in the rail either way, so
-  // nothing is hidden; only the overlay waits to be asked for.
+  // No egress overlay. Measured downwind of the Gironde fires it flagged 110 of the
+  // 250 roads considered -- 44 per cent -- and a wall of amber over half the streets
+  // on screen tells a reader nothing while looking authoritative. The count, the
+  // flagged roads and the caveat are all still in the rail, so nothing is hidden;
+  // what is gone is a map layer that overstated what the model can see.
   ['fires', 'spread', 'closures official', 'detail', 'evacuated', 'burnt', 'aircraft']
     .forEach((n) => view.toggle(n, true));
 
