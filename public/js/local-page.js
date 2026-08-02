@@ -90,6 +90,7 @@ export const COPY = {
     // The map's own controls. Declared here and named in the HTML by data-t, so
     // that adding a chip without a translation fails a test rather than shipping.
     layersToggle: 'Calques',
+    filmPrev: 'Images précédentes', filmNext: 'Images suivantes',
     closePanel: 'Fermer', railHide: 'Masquer le panneau', railShow: 'Afficher le panneau',
     chipFires: 'Feux détectés',
     chipWater: "Points d'eau — registre",
@@ -177,6 +178,7 @@ export const COPY = {
     burntArea: (km2, when) => `${km2} km² already burnt`
       + (when ? ` (département survey of ${when}).` : ' (département survey).'),
     layersToggle: 'Layers',
+    filmPrev: 'Earlier images', filmNext: 'Later images',
     closePanel: 'Close', railHide: 'Hide the panel', railShow: 'Show the panel',
     chipFires: 'Fires detected',
     chipWater: 'Water points — register',
@@ -869,6 +871,87 @@ function closeTrail() {
   applyClearLabel();
 }
 
+// Resize from any edge. CSS `resize` only ever offers the bottom-right corner,
+// which is hard to find and no use when the panel needs to grow leftwards --
+// these panels sit against the left edge of the map, so that is the common case.
+//
+// Dragging a west or north grip moves the origin as well as the size, which is
+// why left/top are written alongside width/height rather than width alone.
+const GRIPS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+const MIN_W = 224;
+const MIN_H = 64;
+
+function makeResizable(panel) {
+  for (const dir of GRIPS) {
+    const grip = document.createElement('div');
+    grip.className = `grip ${dir}`;
+    panel.append(grip);
+    grip.addEventListener('pointerdown', (event) => {
+      if (window.matchMedia('(max-width: 860px)').matches) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const box = panel.getBoundingClientRect();
+      const parent = panel.parentElement.getBoundingClientRect();
+      const x0 = event.clientX;
+      const y0 = event.clientY;
+      grip.setPointerCapture(event.pointerId);
+      // Pin the panel to pixels first: it may still be sitting on the bottom /
+      // right offsets the stylesheet gave it, and resizing from the top with
+      // those in force moves the wrong edge.
+      panel.classList.add('dragged');
+      panel.style.left = `${box.left - parent.left}px`;
+      panel.style.top = `${box.top - parent.top}px`;
+      panel.style.width = `${box.width}px`;
+      panel.style.height = `${box.height}px`;
+
+      const move = (e) => {
+        const dx = e.clientX - x0;
+        const dy = e.clientY - y0;
+        if (dir.includes('e')) panel.style.width = `${Math.max(MIN_W, box.width + dx)}px`;
+        if (dir.includes('s')) panel.style.height = `${Math.max(MIN_H, box.height + dy)}px`;
+        if (dir.includes('w')) {
+          const width = Math.max(MIN_W, box.width - dx);
+          panel.style.width = `${width}px`;
+          panel.style.left = `${box.left - parent.left + (box.width - width)}px`;
+        }
+        if (dir.includes('n')) {
+          const height = Math.max(MIN_H, box.height - dy);
+          panel.style.height = `${height}px`;
+          panel.style.top = `${box.top - parent.top + (box.height - height)}px`;
+        }
+      };
+      const drop = () => {
+        grip.removeEventListener('pointermove', move);
+        grip.removeEventListener('pointerup', drop);
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', drop);
+    });
+  }
+}
+
+// The contact sheet scrolls sideways and said nothing about it, so with the
+// panel at its default width most of the thumbnails were off the edge and the
+// only way to discover them was to drag the corner. Arrows, and they grey out
+// at each end so the reader knows when there is nothing further.
+function wireFilmNav() {
+  const film = $('film');
+  const prev = $('film-prev');
+  const next = $('film-next');
+  if (!film || !prev || !next) return;
+  const page = () => Math.max(120, film.clientWidth - 60);
+  const sync = () => {
+    const max = film.scrollWidth - film.clientWidth - 1;
+    prev.disabled = film.scrollLeft <= 0;
+    next.disabled = film.scrollLeft >= max;
+  };
+  prev.onclick = () => { film.scrollBy({ left: -page(), behavior: 'smooth' }); };
+  next.onclick = () => { film.scrollBy({ left: page(), behavior: 'smooth' }); };
+  film.addEventListener('scroll', sync, { passive: true });
+  new ResizeObserver(sync).observe(film);
+  sync();
+}
+
 // Drag by the header. Pointer events rather than mouse events so a trackpad, a
 // pen and a touch screen all work from one path, and setPointerCapture keeps the
 // panel following even when the pointer outruns it over the map.
@@ -1047,6 +1130,9 @@ async function boot() {
   $('scrub-close').onclick = closeImagery;
   $('day-close').onclick = closeTrail;
   document.querySelectorAll('.scrubber').forEach(makeDraggable);
+  // Layers and legend get the same handles: both hold more than fits.
+  document.querySelectorAll('.scrubber, #toolbar, .map .legend').forEach(makeResizable);
+  wireFilmNav();
   // The rail folds away so the map can have the whole window.
   $('rail-hide').onclick = () => { $('shell').dataset.rail = 'off'; view.invalidate(); };
   $('rail-show').onclick = () => { $('shell').dataset.rail = ''; view.invalidate(); };

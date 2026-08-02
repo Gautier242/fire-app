@@ -772,25 +772,76 @@ dd.air { color: var(--air); }
    not where anybody looks for a close button. */
 .panel-close {
   margin-left: auto; flex: none;
-  width: 26px; height: 26px; padding: 0; cursor: pointer;
+  width: 24px; height: 24px; padding: 0; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
-  background: none; border: 1px solid transparent; border-radius: var(--r);
-  color: var(--faint); font-family: var(--mono); font-size: var(--t-md);
-  line-height: 1;
+  /* A filled light square, not a bare glyph. At --faint on a dark panel the
+     cross was there and effectively invisible; a close control has to read as a
+     control before anybody looks for it. */
+  background: var(--ink); color: var(--surface);
+  border: none; border-radius: 5px;
+  font-family: var(--sans); font-size: 15px; font-weight: 500; line-height: 1;
 }
-.panel-close:hover { color: var(--ink); border-color: var(--line); background: var(--raised); }
+.panel-close:hover { background: var(--danger); color: #fff; }
+.panel-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Resizable with the browser's own grip rather than a drag implementation:
    `resize` is one line, it is keyboard- and touch-aware already, and it cannot
    drift out of sync with the pointer the way hand-rolled handles do.
    min-* keeps a panel from being shrunk to a sliver that cannot be grabbed back. */
-.scrubber {
-  resize: both; overflow: auto;
-  min-width: 15rem; min-height: 5rem;
-  max-width: calc(100% - var(--s-6)); max-height: 80dvh;
+/* Every floating panel: resizable from any edge, and scrolls what will not fit
+   rather than clipping it. The browser's own `resize` grip only ever offers the
+   bottom-right corner, which is both hard to find and useless when the panel
+   wants to grow leftwards, so the edges are ours. */
+.scrubber, .toolbar, .map .legend {
+  overflow: auto;
+  min-width: 14rem; min-height: 4rem;
+  max-width: calc(100% - var(--s-6)); max-height: 82dvh;
 }
+/* The toolbar sizes to its contents until somebody resizes it. */
+.toolbar { min-width: 0; }
+.toolbar-body { overflow: auto; }
+
+/* Eight grab zones, invisible until wanted. 6px is the smallest that a pointer
+   reliably lands on without the panel edge becoming a trap for ordinary clicks. */
+/* Inside the box, not straddling it. The panels scroll their overflow, and
+   `overflow: auto` clips a child sitting at -3px -- the grips were rendered
+   outside the padding box and the pointer never reached them, so every edge
+   except the corner silently did nothing. */
+.grip { position: absolute; z-index: 2; }
+.grip.n { top: 0; left: 0; right: 0; height: 6px; margin-bottom: -6px; cursor: ns-resize; }
+.grip.s { bottom: 0; left: 0; right: 0; height: 6px; margin-top: -6px; cursor: ns-resize; }
+.grip.w { left: 0; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.grip.e { left: calc(100% - 6px); top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.grip.se { left: calc(100% - 14px); top: calc(100% - 14px); width: 14px; height: 14px; cursor: nwse-resize; }
+.grip.sw { left: 0; top: calc(100% - 14px); width: 14px; height: 14px; cursor: nesw-resize; }
+.grip.ne { left: calc(100% - 14px); top: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.grip.nw { left: 0; top: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+/* The bottom-right one is drawn, so at least one edge is visibly draggable. */
+.grip.se::after {
+  content: ''; position: absolute; right: 3px; bottom: 3px;
+  width: 7px; height: 7px;
+  border-right: 2px solid var(--faint); border-bottom: 2px solid var(--faint);
+}
+
+/* The contact sheet scrolls sideways and gave no sign that it did: with the
+   panel at its default width most of the thumbnails were simply off the edge,
+   and the only way to find out was to drag the corner. */
+.film-strip { display: flex; align-items: center; gap: var(--s-1); }
+.film-nav {
+  flex: none; width: 26px; height: 54px; padding: 0; cursor: pointer;
+  background: var(--raised); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r);
+  font-family: var(--sans); font-size: 16px; line-height: 1;
+}
+.film-nav:hover { border-color: var(--accent); }
+.film-nav[disabled] { opacity: 0.3; cursor: default; }
+/* A visible bar, because a hidden one is the whole problem. */
+.film { scrollbar-width: auto; scrollbar-color: var(--faint) transparent; }
+.film::-webkit-scrollbar { height: 9px; }
+.film::-webkit-scrollbar-thumb { background: var(--faint); border-radius: 5px; }
 /* The drag handle: the panel header. Moved by JS because CSS cannot reposition
    an element from a pointer, but the affordance is stated here. */
+.scrubber, .toolbar, .map .legend { position: absolute; }
 .scrub-head { cursor: move; user-select: none; }
 .scrubber.dragged { bottom: auto; right: auto; }
 
@@ -815,8 +866,11 @@ dd.air { color: var(--air); }
 .shell[data-rail="off"] .toolbar { left: calc(var(--s-3) + 36px); }
 @media (max-width: 860px) {
   .shell[data-rail="off"] .toolbar { left: auto; }
-  /* Dragging a panel around a 390px screen is not a gesture anybody wants;
-     on a phone the panels stay in the flow where the layout puts them. */
-  .scrubber { resize: none; min-width: 0; max-width: none; }
+  /* Dragging and resizing a panel around a 390px screen is not a gesture
+     anybody wants; on a phone the panels stay where the layout puts them. */
+  .scrubber, .toolbar, .map .legend {
+    position: static; min-width: 0; max-width: none; max-height: none;
+  }
+  .grip { display: none; }
   .scrub-head { cursor: default; }
 }

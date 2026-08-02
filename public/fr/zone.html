@@ -222,8 +222,15 @@
           <button type="button" class="panel-close" id="scrub-close"
                   data-t-aria="closePanel" aria-label="Fermer">&times;</button>
         </div>
-        <div class="film" id="film" role="group"
-             data-t-aria="ariaFilm" aria-label="Choisir la date de l'image"></div>
+        <!-- Arrows, because the strip scrolls sideways and gave no sign of it. -->
+        <div class="film-strip">
+          <button type="button" class="film-nav" id="film-prev"
+                  data-t-aria="filmPrev" aria-label="Images précédentes">&lsaquo;</button>
+          <div class="film" id="film" role="group"
+               data-t-aria="ariaFilm" aria-label="Choisir la date de l'image"></div>
+          <button type="button" class="film-nav" id="film-next"
+                  data-t-aria="filmNext" aria-label="Images suivantes">&rsaquo;</button>
+        </div>
         <!-- Resolution and how often the sensor looks: the two facts that decide
              whether a layer can answer the question being asked. -->
         <div class="sensor" id="sensor-facts" hidden>
