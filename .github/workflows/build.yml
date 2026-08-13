@@ -30,18 +30,17 @@ jobs:
           python-version: '3.11'
       - run: pip install -r requirements.txt
 
-      # public/data is gitignored, so a fresh checkout carries no history.
-      # Pull the currently published summary back down first: build.main uses
-      # it to keep a failing source's last good data, flagged stale with its
-      # real age. Expected to fail on the very first run.
-      - name: Seed previous data
-        continue-on-error: true
-        run: |
-          mkdir -p public/data
-          curl -sf --max-time 30 \
-            "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/summary.json" \
-            -o public/data/summary.json || rm -f public/data/summary.json
-
+      # public/data is gitignored, so a fresh checkout carries no history and a
+      # failing source would have nothing to carry forward. --seed-from pulls
+      # this build's own published summary back down first, so build.main can
+      # keep the last good data flagged stale with its real age.
+      #
+      # It derives the URL from --out rather than taking one, because it used to
+      # be a curl here that named Canada's path only. France therefore rebuilt
+      # from nothing every run, and when FIRMS went down on 4 August 2026 it
+      # published 0 fires, the publish gate refused to deploy, and the whole
+      # site -- Canada included -- froze on 4 August data for nine days.
+      #
       # Six upstream sources, each 3 attempts x 30s timeout plus backoff.
       # OpenSky credentials are optional: without them the aircraft layer is
       # flagged stale and every other source still publishes.
@@ -50,7 +49,8 @@ jobs:
         env:
           OPENSKY_CLIENT_ID: ${{ secrets.OPENSKY_CLIENT_ID }}
           OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
-        run: python -m build.main --out public/data --country ca
+          SITE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: python -m build.main --out public/data --country ca --seed-from "$SITE"
 
       # France is built separately so its failure cannot take Canada down. The
       # Canadian site is live and answers an evacuation question; a French
@@ -61,7 +61,8 @@ jobs:
         env:
           OPENSKY_CLIENT_ID: ${{ secrets.OPENSKY_CLIENT_ID }}
           OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
-        run: python -m build.main --out public/fr/data --country fr
+          SITE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: python -m build.main --out public/fr/data --country fr --seed-from "$SITE"
 
       # Zones are an optimisation: the browser fetches the same data live, so a
       # missing zone index costs speed and offline availability, never coverage.

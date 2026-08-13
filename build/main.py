@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from build import registry
-from build.http import make_session
+from build.http import TIMEOUT_SECONDS, make_session
 from build.sources import aqhi, bc_evac, bc_fires, bc_roads, cwfis, cwfis_history, opensky
 from build import relay
 from build.sources.fr import (arome, atmo, evac, firms, firms_history, gironde,
@@ -537,16 +537,81 @@ def _write_atomically(path, payload):
     temp.replace(path)
 
 
+# The site root the build publishes to. public/ is what gets uploaded, so a
+# build writing to public/fr/data is served at <site>/fr/data — the URL is a
+# fact about the output directory, not a per-country setting somebody has to
+# remember to add. That distinction is the whole point: this used to be one
+# hard-coded curl in the workflow, it named Canada only, and France therefore
+# rebuilt from nothing every time. See tests/test_seed.py for what that cost.
+SITE_ROOT = Path("public")
+
+
+def seed_url(base, out):
+    """Where this build's own summary is already published, or None.
+
+    None for an output directory that is not part of the site: a scratch build
+    has no published counterpart, and guessing one would seed it from data that
+    is not its own.
+    """
+    try:
+        relative = Path(out).relative_to(SITE_ROOT)
+    except ValueError:
+        return None
+    return f"{str(base).rstrip('/')}/{relative.as_posix()}/summary.json"
+
+
+def seed_previous(out, url, fetch):
+    """Pull the last published summary down so a failing source has something
+    to carry forward.
+
+    Every failure here is non-fatal and returns None. A missing seed costs a
+    failing source its history; refusing to build would cost every source at
+    once, which is strictly worse. The one thing that must not happen is
+    writing something unparseable into summary.json, because build() reads that
+    file next and a broken read fails the entire build rather than one section.
+    """
+    path = Path(out) / "summary.json"
+    if path.exists():
+        # A local build already produced one. Reaching over it for the published
+        # copy would quietly discard the run that just finished.
+        return json.loads(path.read_text())
+    if not url:
+        return None
+    try:
+        summary = json.loads(fetch(url))
+    except Exception:  # noqa: BLE001 - first run, site down, or an HTML 404 page
+        return None
+    # Pages answers an unknown path with a styled HTML page, and a summary
+    # without sources cannot tell build() which section a failure belongs to.
+    if not isinstance(summary, dict) or "sources" not in summary:
+        return None
+    _write_atomically(path, summary)
+    return summary
+
+
+def _fetch_text(url):
+    session = make_session()
+    response = session.get(url, timeout=TIMEOUT_SECONDS)
+    response.raise_for_status()
+    return response.text
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="public/data")
     parser.add_argument("--country", default="ca", choices=sorted(SECTIONS))
+    parser.add_argument("--seed-from", default=None, metavar="URL",
+                        help="site root to recover the last published summary from, "
+                             "so a failing source keeps its last good data in CI")
     args = parser.parse_args()
 
     country = args.country
     out = Path(args.out)
     summary_path = out / "summary.json"
-    previous = json.loads(summary_path.read_text()) if summary_path.exists() else None
+    # Reads a local summary if one is there, otherwise the published one. Both
+    # are optional: with neither, a failing source simply has no history.
+    previous = seed_previous(out, seed_url(args.seed_from, out) if args.seed_from else None,
+                             fetch=_fetch_text)
 
     session = make_session()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
