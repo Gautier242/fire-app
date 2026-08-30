@@ -7,9 +7,9 @@ name: build
 # git.
 #
 # To bring it back: run it once from the Actions tab, or restore the schedule
-# below. Note that data/history.json was 172 KB against a 150 KB budget when
-# this stopped -- a returning build fails on tests/test_budget.py until that
-# file is narrowed to what the page reads.
+# below. It is ready to run -- the size failure that was mailing about itself
+# when this stopped is fixed in cwfis_history.thin(), and a full build plus
+# tests/test_budget.py was run against live sources on 2026-08-30 to confirm it.
 on:
   workflow_dispatch:
   # schedule:
