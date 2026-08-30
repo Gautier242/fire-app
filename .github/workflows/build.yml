@@ -1,11 +1,21 @@
 name: build
 
+# Stopped 2026-08-30. The Gironde fire is out and the owner is no longer using
+# the site, so there is nothing to refresh every half hour -- only failing runs
+# to mail about. The last successful deploy keeps serving on Pages for as long
+# as the repository exists, and archive/ holds the fire itself, day by day, in
+# git.
+#
+# To bring it back: run it once from the Actions tab, or restore the schedule
+# below. Note that data/history.json was 172 KB against a 150 KB budget when
+# this stopped -- a returning build fails on tests/test_budget.py until that
+# file is narrowed to what the page reads.
 on:
-  schedule:
-    - cron: '*/30 * * * *'
   workflow_dispatch:
-  push:
-    branches: [main]
+  # schedule:
+  #   - cron: '*/30 * * * *'
+  # push:
+  #   branches: [main]
 
 permissions:
   contents: read

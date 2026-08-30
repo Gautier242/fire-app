@@ -10,12 +10,15 @@ name: archive
 # the published site rather than rebuilding, so it costs the upstream APIs
 # nothing and records exactly what was served to readers.
 
+# Stopped 2026-08-30 with the build. There is no emergency left to record: the
+# départemental layers this watched are quiet, and the days that mattered
+# (2026-07-22 to 2026-08-30) are already committed under archive/.
 on:
-  schedule:
-    # Twice a day. Once would miss a feed that was down at that hour, and the
-    # digest keeps the later reading of any given day.
-    - cron: '17 5,17 * * *'
   workflow_dispatch:
+  # schedule:
+  #   # Twice a day. Once would miss a feed that was down at that hour, and the
+  #   # digest keeps the later reading of any given day.
+  #   - cron: '17 5,17 * * *'
 
 permissions:
   contents: write
